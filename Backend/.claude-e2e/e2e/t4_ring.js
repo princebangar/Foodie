@@ -1,0 +1,26 @@
+const { launch, newApp, shot, text, clickText, sleep, BASE } = require('./lib');
+const { loginUser, loginRestaurant, step, log } = require('./t2_order');
+(async () => {
+  const browser = await launch();
+  const r = await newApp(browser, 'rest');
+  const u = await newApp(browser, 'user');
+  const cdp = await r.createCDPSession();
+  await cdp.send('Network.enable');
+  const frames = [];
+  cdp.on('Network.webSocketFrameReceived', (e) => { const d = e.response.payloadData || ''; if (!/^[23]$/.test(d)) frames.push(d.slice(0, 160)); });
+  cdp.on('Network.webSocketCreated', (e) => frames.push('WS-CREATED ' + e.url));
+  r.on('console', (m) => { const t = m.text(); if (/socket|order|alert|audio|play/i.test(t)) frames.push('CONSOLE ' + t.slice(0, 160)); });
+  await step(r, '20-login', () => loginRestaurant(r));
+  await step(u, '20-login', () => loginUser(u));
+  await u.goto(`${BASE}/food/user/restaurants/the-prince-restro`, { waitUntil: 'networkidle2' }); await sleep(2500);
+  await clickText(u, /^ADD\s*\+?$/, { selector: 'button' }); await sleep(1500);
+  await u.goto(`${BASE}/food/user/cart`, { waitUntil: 'networkidle2' }); await sleep(3000);
+  console.log('frames before order:', frames.length, frames.slice(-5));
+  await clickText(u, /Place Order/, { selector: 'button' });
+  await sleep(15000);
+  await log(r, '21-after');
+  const plays = await r.evaluate(() => window.__plays.map((p) => `${p.t} ${p.src.split('/').pop() || '(empty)'}`));
+  console.log('\nPLAYS', plays);
+  console.log('\nFRAMES\n' + frames.join('\n'));
+  await browser.close();
+})();
