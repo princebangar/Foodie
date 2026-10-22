@@ -1,7 +1,7 @@
 // One-off: split grouped TODO rows of the report into one row per bug (descriptions from foodrows.txt).
 const fs = require('fs');
 const path = require('path');
-const file = path.join(__dirname, '..', '..', 'docs', 'FRESLY_FOOD_BUG_REPORT.md');
+const file = path.join(__dirname, '..', '..', 'docs', 'FOODIE_FOOD_BUG_REPORT.md');
 const rows = fs.readFileSync(process.argv[2], 'utf8').split('\n').filter(Boolean).map((l) => {
   const [n, app, mod, bug] = l.split(' | ');
   return { n: Number(n), app: app.trim(), bug: `${mod.trim()}: ${bug.trim()}`.replace(/\|/g, '/').slice(0, 110) };

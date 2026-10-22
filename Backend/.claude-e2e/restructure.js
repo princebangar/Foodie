@@ -1,4 +1,4 @@
-// Reorganise Fresly frontend media: git mv/rm files and rewrite references in source.
+// Reorganise Foodie frontend media: git mv/rm files and rewrite references in source.
 // Usage: node restructure.js <FrontendRoot> [--dry]
 const fs = require('fs'), path = require('path'), { execFileSync } = require('child_process');
 const root = process.argv[2]; const dry = process.argv.includes('--dry');

@@ -8,8 +8,8 @@ importScripts("https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js
 importScripts("https://www.gstatic.com/firebasejs/10.13.2/firebase-messaging-compat.js");
 
 const sanitize = (value) => String(value || "").trim().replace(/^['"]|['"]$/g, "");
-const CONFIG_CACHE = "fresly-fcm-config-v1";
-const CONFIG_URL = "/__fresly_fcm_web_config__";
+const CONFIG_CACHE = "foodie-fcm-config-v1";
+const CONFIG_URL = "/__foodie_fcm_web_config__";
 const notificationDedupWindowMs = 30000;
 
 let messagingReady = false;
@@ -116,8 +116,8 @@ async function resolveFirebaseConfig() {
 
 function shouldSkipDuplicateOsNotification(notificationKey) {
   if (!notificationKey) return false;
-  if (!self.__freslyOsDedup) self.__freslyOsDedup = {};
-  const shared = self.__freslyOsDedup;
+  if (!self.__foodieOsDedup) self.__foodieOsDedup = {};
+  const shared = self.__foodieOsDedup;
   const now = Date.now();
   for (const [key, timestamp] of Object.entries(shared)) {
     if (now - Number(timestamp) > notificationDedupWindowMs) delete shared[key];
@@ -225,7 +225,7 @@ async function showOsNotificationFromPayload(payload) {
     icon: "/logo.png",
     badge: "/logo.png",
     image,
-    tag: notificationKey || `fresly-${Date.now()}`,
+    tag: notificationKey || `foodie-${Date.now()}`,
     renotify: data.type === "admin_broadcast",
     silent: false,
     requireInteraction: data.type === "admin_broadcast",
@@ -274,7 +274,7 @@ void ensureFirebaseMessaging();
 self.addEventListener("message", (event) => {
   const data = event?.data;
   if (!data || typeof data !== "object") return;
-  if (data.type === "FRESLY_FCM_CONFIG" && data.config) {
+  if (data.type === "FOODIE_FCM_CONFIG" && data.config) {
     event.waitUntil(
       (async () => {
         await writeCachedFirebaseConfig(data.config);

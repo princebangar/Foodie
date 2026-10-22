@@ -1,5 +1,5 @@
 ﻿/**
- * PM2 ecosystem for Fresly API + BullMQ workers.
+ * PM2 ecosystem for Foodie API + BullMQ workers.
  *
  * Usage (on live server, from Backend folder):
  *   pm2 start ecosystem.config.cjs
@@ -13,7 +13,7 @@
 module.exports = {
   apps: [
     {
-      name: 'fresly-v2',
+      name: 'foodie-v2',
       script: 'server.js',
       cwd: __dirname,
       instances: 1,
@@ -27,7 +27,7 @@ module.exports = {
       },
     },
     {
-      name: 'fresly-worker-order',
+      name: 'foodie-worker-order',
       script: 'src/queues/workers/order.worker.js',
       cwd: __dirname,
       instances: 1,
@@ -38,7 +38,7 @@ module.exports = {
       env: { NODE_ENV: 'production' },
     },
     {
-      name: 'fresly-worker-payment',
+      name: 'foodie-worker-payment',
       script: 'src/queues/workers/payment.worker.js',
       cwd: __dirname,
       instances: 1,
@@ -49,7 +49,7 @@ module.exports = {
       env: { NODE_ENV: 'production' },
     },
     {
-      name: 'fresly-worker-notification',
+      name: 'foodie-worker-notification',
       script: 'src/queues/workers/notification.worker.js',
       cwd: __dirname,
       instances: 1,
@@ -60,7 +60,7 @@ module.exports = {
       env: { NODE_ENV: 'production' },
     },
     {
-      name: 'fresly-worker-tracking',
+      name: 'foodie-worker-tracking',
       script: 'src/queues/workers/tracking.worker.js',
       cwd: __dirname,
       instances: 1,
@@ -71,7 +71,7 @@ module.exports = {
       env: { NODE_ENV: 'production' },
     },
     {
-      name: 'fresly-worker-otp',
+      name: 'foodie-worker-otp',
       script: 'src/queues/workers/otp.worker.js',
       cwd: __dirname,
       instances: 1,

@@ -12,7 +12,7 @@ export const showNotificationToast = ({ title, message } = {}) => {
         <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-[#DC2626] to-[#991B1B] flex items-center justify-center shadow-lg">
           <img
             src="/logo.png"
-            alt="Fresly"
+            alt="Foodie"
             className="w-7 h-7 object-contain brightness-0 invert"
             onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
           />
@@ -33,7 +33,7 @@ export const showNotificationToast = ({ title, message } = {}) => {
   });
 };
 
-export const showFreslyBrandedToast = ({ title, message, id = "fresly-branded-toast", duration = 4000 } = {}) => {
+export const showFoodieBrandedToast = ({ title, message, id = "foodie-branded-toast", duration = 4000 } = {}) => {
   toast.custom(
     () => (
       <div className="w-[calc(100vw-32px)] sm:w-[380px] bg-white shadow-[0_8px_30px_rgb(0,0,0,0.12)] rounded-3xl pointer-events-auto flex items-center gap-4 p-3.5 border border-gray-50 animate-in fade-in slide-in-from-top-4 z-[11000]">
@@ -41,7 +41,7 @@ export const showFreslyBrandedToast = ({ title, message, id = "fresly-branded-to
           <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-[#DC2626] to-[#991B1B] flex items-center justify-center p-1.5 shadow-lg">
             <img
               src="/logo.png"
-              alt="Fresly"
+              alt="Foodie"
               className="w-full h-full object-contain brightness-0 invert"
             />
           </div>
@@ -63,7 +63,7 @@ export const showFreslyBrandedToast = ({ title, message, id = "fresly-branded-to
 };
 
 export const showAddressRemovedToast = () => {
-  showFreslyBrandedToast({
+  showFoodieBrandedToast({
     title: "Address Removed Successfully",
     id: "address-removed-toast",
   });

@@ -8,7 +8,7 @@ export async function getBusinessSettings(req, res, next) {
         if (!settings) {
             // Create default settings if none exist
             settings = await FoodBusinessSettings.create({
-                companyName: 'Fresly',
+                companyName: 'Foodie',
                 email: 'admin@appzeto.com'
             });
         }

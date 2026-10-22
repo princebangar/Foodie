@@ -49,10 +49,10 @@ app.use(helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' }
 }));
 const allowedOrigins = [
-    'https://fresly.in',
-    'https://www.fresly.in',
-    'https://freslyindia.cloud',
-    'https://www.freslyindia.cloud',
+    'https://foodie.in',
+    'https://www.foodie.in',
+    'https://foodieindia.cloud',
+    'https://www.foodieindia.cloud',
     'http://localhost:5173',
     'http://localhost:3000'
 ];
@@ -91,7 +91,7 @@ app.use((req, _res, next) => {
 });
 app.use(xssClean());
 
-// Uploads are served by nginx straight off disk in production (see deploy/nginx/fresly.conf).
+// Uploads are served by nginx straight off disk in production (see deploy/nginx/foodie.conf).
 // This static mount is the dev fallback only — SERVE_UPLOADS_FROM_NODE=true forces it on.
 if (config.serveUploadsFromNode) {
     app.use(

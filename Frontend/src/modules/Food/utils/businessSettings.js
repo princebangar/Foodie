@@ -7,7 +7,7 @@ import apiClient from "@food/api/axios";
 import { API_ENDPOINTS } from "@food/api/config";
 import { publicGetOnce } from "@food/api";
 
-const SETTINGS_KEY = 'fresly_business_settings';
+const SETTINGS_KEY = 'foodie_business_settings';
 
 // Initialize from localStorage immediately so it's available for components on mount
 let cachedSettings = (() => {
@@ -79,7 +79,7 @@ export const loadBusinessSettings = async () => {
 export const updateFavicon = (url) => {
   if (typeof document === 'undefined') return;
 
-  // Admin favicon when present; otherwise default Fresly crop favicon
+  // Admin favicon when present; otherwise default Foodie crop favicon
   const href = url || '/favicon.webp';
 
   // Remove existing favicons
@@ -101,7 +101,7 @@ export const updateFavicon = (url) => {
  */
 export const updateTitle = (companyName) => {
   if (typeof document !== 'undefined') {
-    document.title = (companyName && companyName !== "Foodelo") ? companyName : "Fresly";
+    document.title = (companyName && companyName !== "Foodelo") ? companyName : "Foodie";
   }
 };
 
@@ -139,23 +139,23 @@ export const getCachedSettings = () => {
 
 /**
  * Get company name from business settings with fallback
- * @returns {string} Company name or default "Fresly"
+ * @returns {string} Company name or default "Foodie"
  */
 export const getCompanyName = () => {
   const settings = getCachedSettings();
-  const name = settings?.companyName || "Fresly";
-  return name === "Foodelo" ? "Fresly" : name;
+  const name = settings?.companyName || "Foodie";
+  return name === "Foodelo" ? "Foodie" : name;
 };
 
 /**
  * Get company name asynchronously (loads if not cached)
- * @returns {Promise<string>} Company name or default "Fresly"
+ * @returns {Promise<string>} Company name or default "Foodie"
  */
 export const getCompanyNameAsync = async () => {
   try {
     const settings = await loadBusinessSettings();
-    return settings?.companyName || "Fresly";
+    return settings?.companyName || "Foodie";
   } catch (error) {
-    return "Fresly";
+    return "Foodie";
   }
 };

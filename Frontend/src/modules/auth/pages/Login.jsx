@@ -559,7 +559,7 @@ export default function UnifiedOTPFastLogin() {
           <div className="mb-10 mt-8 text-center flex flex-col items-center">
             <img
               src="/logo.png"
-              alt="Fresly Logo"
+              alt="Foodie Logo"
               className="h-28 mt-6 mb-1 object-contain drop-shadow-md"
             />
             <div className="text-sm text-gray-500 dark:text-gray-400 mt-0 font-medium flex items-center justify-center gap-1.5">

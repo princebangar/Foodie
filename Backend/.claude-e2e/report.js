@@ -1,8 +1,8 @@
-// Update one row of docs/FRESLY_FOOD_BUG_REPORT.md: node report.js <row> <STATUS> "<what was done>"
+// Update one row of docs/FOODIE_FOOD_BUG_REPORT.md: node report.js <row> <STATUS> "<what was done>"
 // Also moves the row number between the summary lists (Fixed / OK / TODO).
 const fs = require('fs');
 const path = require('path');
-const file = path.join(__dirname, '..', '..', 'docs', 'FRESLY_FOOD_BUG_REPORT.md');
+const file = path.join(__dirname, '..', '..', 'docs', 'FOODIE_FOOD_BUG_REPORT.md');
 const [row, status, note] = process.argv.slice(2);
 let md = fs.readFileSync(file, 'utf8');
 const lines = md.split('\n');

@@ -1,5 +1,5 @@
 const fs=require('fs');
-const p='C:/Users/Prince/Prince Bangar/Coding/Fresly/Frontend/src/modules/Food/pages/restaurant/Onboarding.jsx';
+const p='C:/Users/Prince/Prince Bangar/Coding/Foodie/Frontend/src/modules/Food/pages/restaurant/Onboarding.jsx';
 const raw=fs.readFileSync(p,'utf8');const crlf=raw.includes('\r\n');let s=raw.replace(/\r\n/g,'\n');
 const rep=(a,b)=>{ if(!s.includes(a)) throw new Error('missing '+a.slice(0,60)); s=s.replace(a,b); };
 rep(`const OUTSIDE_ZONE_MESSAGE =`,`const CUISINE_OPTIONS = ["North Indian", "South Indian", "Chinese", "Pizza", "Burgers", "Bakery", "Cafe"]

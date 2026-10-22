@@ -7,7 +7,7 @@ import outOfZoneBg from '@food/assets/illustrations/out-of-zone-bg.jpg';
 
 const OutOfZoneScreen = ({ location, handleLocationClick }) => {
   const { userProfile } = useProfile();
-  const BRAND_NAME = "Fresly"; // Change this for different projects
+  const BRAND_NAME = "Foodie"; // Change this for different projects
 
   const routerLocation = useLocation();
   const initials = React.useMemo(() => {

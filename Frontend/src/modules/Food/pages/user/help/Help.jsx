@@ -406,10 +406,10 @@ export default function Help() {
                       We'll respond within 24 hours
                     </p>
                     <a
-                      href="mailto:support@fresly.com"
+                      href="mailto:support@foodie.com"
                       className="text-sm text-primary hover:underline font-medium"
                     >
-                      support@fresly.com
+                      support@foodie.com
                     </a>
                   </div>
                 </div>

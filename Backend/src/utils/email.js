@@ -55,7 +55,7 @@ function getFrontendUrl() {
     return url || null;
 }
 
-function getFreslyLogoUrl() {
+function getFoodieLogoUrl() {
     const explicitLogo = String(process.env.EMAIL_LOGO_URL || '').trim();
     if (explicitLogo) return explicitLogo;
 
@@ -64,7 +64,7 @@ function getFreslyLogoUrl() {
         return `${frontendUrl}/logo-transparent.webp`;
     }
 
-    return 'https://freslyindia.cloud/logo-transparent.webp';
+    return 'https://foodieindia.cloud/logo-transparent.webp';
 }
 
 function getInlineLogoAttachment() {
@@ -82,10 +82,10 @@ function getInlineLogoAttachment() {
     try {
         const content = readFileSync(logoPath);
         cachedInlineLogoAttachment = {
-            filename: 'fresly-logo.webp',
+            filename: 'foodie-logo.webp',
             content,
             contentType: 'image/webp',
-            cid: 'fresly-logo'
+            cid: 'foodie-logo'
         };
         return cachedInlineLogoAttachment;
     } catch (error) {
@@ -104,7 +104,7 @@ function isValidEmail(email) {
     return EMAIL_REGEX.test(String(email || '').trim());
 }
 
-function resolveFromHeader(displayName = 'Fresly') {
+function resolveFromHeader(displayName = 'Foodie') {
     const emailUser = String(config.emailUser || '').trim();
     if (emailUser) {
         // Gmail SMTP requires the From address to match the authenticated account.
@@ -132,7 +132,7 @@ async function sendEmail({ to, subject, html, text, fromDisplay, logLabel = 'Ema
 
     try {
         await trans.sendMail({
-            from: fromDisplay || resolveFromHeader('Fresly'),
+            from: fromDisplay || resolveFromHeader('Foodie'),
             to,
             subject,
             text,
@@ -151,7 +151,7 @@ async function sendEmail({ to, subject, html, text, fromDisplay, logLabel = 'Ema
 
         try {
             await retryTrans.sendMail({
-                from: fromDisplay || resolveFromHeader('Fresly'),
+                from: fromDisplay || resolveFromHeader('Foodie'),
                 to,
                 subject,
                 text,
@@ -170,20 +170,20 @@ async function sendEmail({ to, subject, html, text, fromDisplay, logLabel = 'Ema
 }
 
 function buildEmailHeaderHtml() {
-    const logoUrl = getFreslyLogoUrl();
+    const logoUrl = getFoodieLogoUrl();
     const safeLogoUrl = escapeHtml(logoUrl);
     const inlineLogo = getInlineLogoAttachment();
-    const logoSrc = inlineLogo ? 'cid:fresly-logo' : safeLogoUrl;
+    const logoSrc = inlineLogo ? 'cid:foodie-logo' : safeLogoUrl;
 
     return `
           <tr>
             <td style="background: ${PRIMARY_COLOR}; padding: 24px 32px; text-align: center;">
-              <img src="${logoSrc}" alt="Fresly" width="150" style="display: block; margin: 0 auto; max-width: 150px; width: 150px; height: auto; border: 0; outline: none; text-decoration: none; border-radius: 12px;" />
+              <img src="${logoSrc}" alt="Foodie" width="150" style="display: block; margin: 0 auto; max-width: 150px; width: 150px; height: auto; border: 0; outline: none; text-decoration: none; border-radius: 12px;" />
             </td>
           </tr>`;
 }
 
-function buildFreslyEmailHtml({
+function buildFoodieEmailHtml({
     greeting,
     bannerType = 'success',
     bannerTitle,
@@ -226,7 +226,7 @@ function buildFreslyEmailHtml({
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Fresly</title>
+  <title>Foodie</title>
 </head>
 <body style="margin: 0; padding: 0; background: #f4f5f7; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;">
   <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background: #f4f5f7; padding: 32px 16px;">
@@ -255,8 +255,8 @@ function buildFreslyEmailHtml({
           <tr>
             <td style="background: #fafafa; padding: 20px 32px; text-align: center; border-top: 1px solid #eee;">
               <p style="margin: 0; color: #999; font-size: 12px; line-height: 1.5;">
-                &copy; ${new Date().getFullYear()} Fresly. All rights reserved.<br>
-                <strong style="color: #666;">Team Fresly</strong>
+                &copy; ${new Date().getFullYear()} Foodie. All rights reserved.<br>
+                <strong style="color: #666;">Team Foodie</strong>
               </p>
             </td>
           </tr>
@@ -281,7 +281,7 @@ export async function sendAdminResetOtpEmail(to, otp) {
         return false;
     }
     const from = config.emailFrom || config.emailUser;
-    const subject = 'Your password reset code – Fresly Admin';
+    const subject = 'Your password reset code – Foodie Admin';
     const html = `
 <!DOCTYPE html>
 <html>
@@ -292,7 +292,7 @@ export async function sendAdminResetOtpEmail(to, otp) {
   <p style="font-size: 24px; font-weight: bold; letter-spacing: 4px; background: #f5f5f5; padding: 12px 16px; border-radius: 8px;">${otp}</p>
   <p style="color: #666; font-size: 14px;">If you did not request this, you can ignore this email.</p>
   <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-  <p style="color: #999; font-size: 12px;">Fresly Admin</p>
+  <p style="color: #999; font-size: 12px;">Foodie Admin</p>
 </body>
 </html>`;
     const text = `Your password reset code is: ${otp}. It is valid for 10 minutes. If you did not request this, ignore this email.`;
@@ -302,7 +302,7 @@ export async function sendAdminResetOtpEmail(to, otp) {
         subject,
         html,
         text,
-        fromDisplay: `Fresly <${config.emailUser || from}>`,
+        fromDisplay: `Foodie <${config.emailUser || from}>`,
         logLabel: 'Admin reset OTP email'
     });
 }
@@ -320,10 +320,10 @@ export async function sendRestaurantApprovalEmail({ to, restaurantName, restaura
 
     const safeName = escapeHtml(restaurantName || 'your restaurant');
     const subject = isChangesApproval
-        ? '🎉 Your Restaurant Changes have been Approved | Fresly'
-        : '🎉 Your Restaurant has been Approved | Fresly';
+        ? '🎉 Your Restaurant Changes have been Approved | Foodie'
+        : '🎉 Your Restaurant has been Approved | Foodie';
 
-    const html = buildFreslyEmailHtml({
+    const html = buildFoodieEmailHtml({
         greeting: 'Hello,',
         bannerType: 'success',
         bannerTitle: 'Congratulations!',
@@ -333,12 +333,12 @@ export async function sendRestaurantApprovalEmail({ to, restaurantName, restaura
         ],
         introParagraphs: isChangesApproval
             ? [
-                `Your profile changes for <strong>${safeName}</strong> have been approved on Fresly.`,
-                'Your updated restaurant details are now live on the Fresly platform. You can continue managing your business through the Fresly restaurant app.'
+                `Your profile changes for <strong>${safeName}</strong> have been approved on Foodie.`,
+                'Your updated restaurant details are now live on the Foodie platform. You can continue managing your business through the Foodie restaurant app.'
             ]
             : [
-                `<strong>${safeName}</strong> has been approved on Fresly. You can now start receiving orders through the Fresly app.`,
-                'Your restaurant profile is now live on the Fresly platform. Complete your menu setup, manage orders, and grow your business with us.'
+                `<strong>${safeName}</strong> has been approved on Foodie. You can now start receiving orders through the Foodie app.`,
+                'Your restaurant profile is now live on the Foodie platform. Complete your menu setup, manage orders, and grow your business with us.'
             ]
     });
 
@@ -346,13 +346,13 @@ export async function sendRestaurantApprovalEmail({ to, restaurantName, restaura
         'Congratulations!',
         '',
         isChangesApproval
-            ? `Your profile changes for ${restaurantName || 'your restaurant'} have been approved on Fresly.`
-            : `${restaurantName || 'Your restaurant'} has been approved on Fresly. You can now start receiving orders through the Fresly app.`,
+            ? `Your profile changes for ${restaurantName || 'your restaurant'} have been approved on Foodie.`
+            : `${restaurantName || 'Your restaurant'} has been approved on Foodie. You can now start receiving orders through the Foodie app.`,
         '',
         `Restaurant: ${restaurantName || '—'}`,
         `Status: ${isChangesApproval ? 'Changes Approved' : 'Approved'}`,
         '',
-        'Team Fresly'
+        'Team Foodie'
     ].join('\n');
 
     return sendEmail({
@@ -385,10 +385,10 @@ export async function sendRestaurantRejectionEmail({
     const safeName = escapeHtml(restaurantName || 'your restaurant');
 
     const subject = isChangesRejection
-        ? 'Your Restaurant Changes have been Rejected | Fresly'
-        : 'Your Restaurant has been Rejected | Fresly';
+        ? 'Your Restaurant Changes have been Rejected | Foodie'
+        : 'Your Restaurant has been Rejected | Foodie';
 
-    const html = buildFreslyEmailHtml({
+    const html = buildFoodieEmailHtml({
         greeting: 'Hello,',
         bannerType: 'rejection',
         bannerTitle: isChangesRejection ? 'Restaurant changes update' : 'Restaurant registration update',
@@ -407,8 +407,8 @@ export async function sendRestaurantRejectionEmail({
 
     const text = [
         isChangesRejection
-            ? 'Your restaurant changes on Fresly could not be approved.'
-            : 'Your restaurant registration on Fresly could not be approved.',
+            ? 'Your restaurant changes on Foodie could not be approved.'
+            : 'Your restaurant registration on Foodie could not be approved.',
         '',
         `Restaurant: ${restaurantName || '—'}`,
         'Status: Rejected',
@@ -416,7 +416,7 @@ export async function sendRestaurantRejectionEmail({
         '',
         'Please review the reason below and reapply when ready.',
         '',
-        'Team Fresly'
+        'Team Foodie'
     ].join('\n');
 
     return sendEmail({
@@ -441,22 +441,22 @@ export async function sendDeliveryApprovalEmail({ to, partnerName, partnerId, is
 
     const firstName = escapeHtml(getFirstName(partnerName));
     const subject = isChangesApproval
-        ? '🎉 Your Delivery Partner Changes have been Approved | Fresly'
-        : '🎉 Your Delivery Partner Account has been Approved | Fresly';
+        ? '🎉 Your Delivery Partner Changes have been Approved | Foodie'
+        : '🎉 Your Delivery Partner Account has been Approved | Foodie';
 
-    const html = buildFreslyEmailHtml({
+    const html = buildFoodieEmailHtml({
         greeting: 'Hello,',
         bannerType: 'success',
         bannerTitle: `Welcome ${firstName}!`,
         bannerMessage: isChangesApproval
-            ? 'Your profile changes have been approved. You can continue delivering with Fresly.'
-            : 'Your account is approved. You can now go online and start earning with Fresly.',
+            ? 'Your profile changes have been approved. You can continue delivering with Foodie.'
+            : 'Your account is approved. You can now go online and start earning with Foodie.',
         infoRows: [
             { label: 'Partner Name', value: partnerName || '—' },
             { label: 'Status', value: isChangesApproval ? 'Changes Approved' : 'Approved' }
         ],
         introParagraphs: [
-            'Open the Fresly delivery app, go online, and start accepting delivery requests in your zone.'
+            'Open the Foodie delivery app, go online, and start accepting delivery requests in your zone.'
         ]
     });
 
@@ -464,13 +464,13 @@ export async function sendDeliveryApprovalEmail({ to, partnerName, partnerId, is
         `Welcome ${getFirstName(partnerName)}!`,
         '',
         isChangesApproval
-            ? 'Your delivery partner profile changes have been approved on Fresly.'
-            : 'Your delivery partner account has been approved on Fresly.',
+            ? 'Your delivery partner profile changes have been approved on Foodie.'
+            : 'Your delivery partner account has been approved on Foodie.',
         '',
         `Partner: ${partnerName || '—'}`,
         `Status: ${isChangesApproval ? 'Changes Approved' : 'Approved'}`,
         '',
-        'Team Fresly'
+        'Team Foodie'
     ].join('\n');
 
     return sendEmail({
@@ -503,10 +503,10 @@ export async function sendDeliveryRejectionEmail({
     const firstName = escapeHtml(getFirstName(partnerName));
 
     const subject = isChangesRejection
-        ? 'Your Delivery Partner Changes have been Rejected | Fresly'
-        : 'Your Delivery Partner Account has been Rejected | Fresly';
+        ? 'Your Delivery Partner Changes have been Rejected | Foodie'
+        : 'Your Delivery Partner Account has been Rejected | Foodie';
 
-    const html = buildFreslyEmailHtml({
+    const html = buildFoodieEmailHtml({
         greeting: 'Hello,',
         bannerType: 'rejection',
         bannerTitle: isChangesRejection ? 'Delivery partner changes update' : 'Delivery partner application update',
@@ -525,8 +525,8 @@ export async function sendDeliveryRejectionEmail({
 
     const text = [
         isChangesRejection
-            ? 'Your delivery partner profile changes on Fresly could not be approved.'
-            : 'Your delivery partner application on Fresly could not be approved.',
+            ? 'Your delivery partner profile changes on Foodie could not be approved.'
+            : 'Your delivery partner application on Foodie could not be approved.',
         '',
         `Partner: ${partnerName || '—'}`,
         'Status: Rejected',
@@ -534,7 +534,7 @@ export async function sendDeliveryRejectionEmail({
         '',
         'Please review the reason below and reapply when ready.',
         '',
-        'Team Fresly'
+        'Team Foodie'
     ].join('\n');
 
     return sendEmail({

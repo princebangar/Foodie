@@ -1,5 +1,5 @@
 const fs=require('fs');
-const root='C:/Users/Prince/Prince Bangar/Coding/Fresly/Frontend/src/modules/Food/pages/';
+const root='C:/Users/Prince/Prince Bangar/Coding/Foodie/Frontend/src/modules/Food/pages/';
 for (const f of ['admin/restaurant/AddRestaurant.jsx','admin/restaurant/RestaurantsList.jsx','restaurant/EditOwner.jsx','restaurant/Onboarding.jsx']) {
   const raw=fs.readFileSync(root+f,'utf8'); const crlf=raw.includes('\r\n'); let s=raw.replace(/\r\n/g,'\n'); const before=s;
   s=s.replace(/\} else if \(closingMinutes < openingMinutes\) \{\n\s*errors\.push\("Closing time cannot be less than opening time"\)\n\s*\}/g,'}');

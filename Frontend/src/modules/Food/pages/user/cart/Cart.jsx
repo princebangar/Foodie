@@ -2262,7 +2262,7 @@ export default function Cart() {
           typeof window !== "undefined" &&
           Boolean(window.flutter_inappwebview) &&
           /iPhone|iPad|iPod/i.test(window.navigator?.userAgent || "")
-            ? " | After paying in your UPI app, come back to the Fresly app to confirm your order."
+            ? " | After paying in your UPI app, come back to the Foodie app to confirm your order."
             : ""
         }`,
         callback_url: callbackUrl,

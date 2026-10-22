@@ -981,7 +981,7 @@ async function syncFirebaseConfigToServiceWorker(registration, firebasePublicEnv
 
   const post = (sw) => {
     try {
-      sw?.postMessage({ type: "FRESLY_FCM_CONFIG", config });
+      sw?.postMessage({ type: "FOODIE_FCM_CONFIG", config });
     } catch {
       // ignore
     }

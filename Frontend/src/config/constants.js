@@ -1,5 +1,5 @@
 ﻿export const APP_CONFIG = {
-  NAME: 'Fresly',
+  NAME: 'Foodie',
   VERSION: '1.0.0',
 };
 

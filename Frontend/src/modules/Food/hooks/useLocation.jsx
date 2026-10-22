@@ -16,7 +16,7 @@ const loadCustomizationSettings = async () => {
 
   // Try loading from localStorage first
   try {
-    const saved = localStorage.getItem("fresly_customization_settings")
+    const saved = localStorage.getItem("foodie_customization_settings")
     if (saved) {
       globalCustomizationSettings = JSON.parse(saved)
     }
@@ -30,7 +30,7 @@ const loadCustomizationSettings = async () => {
       if (settings) {
         globalCustomizationSettings = settings
         try {
-          localStorage.setItem("fresly_customization_settings", JSON.stringify(settings))
+          localStorage.setItem("foodie_customization_settings", JSON.stringify(settings))
         } catch (e) {}
         // Fire a custom event to notify components that customization settings have loaded
         window.dispatchEvent(new CustomEvent("customizationSettingsLoaded"))
@@ -355,7 +355,7 @@ const AUTO_LOCATION_REFRESH_COOLDOWN_MS = 15_000
 let lastAutoLocationRefreshAt = 0
 
 /** Marks an active tab after boot; not used alone for stickiness (Chrome can restore it). */
-export const LOCATION_APP_SESSION_KEY = "fresly_location_session"
+export const LOCATION_APP_SESSION_KEY = "foodie_location_session"
 
 function isBrowserPageReload() {
   try {
@@ -418,7 +418,7 @@ export function useLocation() {
 
   const [isDefaultLocationMode, setIsDefaultLocationMode] = useState(() => {
     try {
-      const saved = localStorage.getItem("fresly_customization_settings")
+      const saved = localStorage.getItem("foodie_customization_settings")
       if (saved) {
         return JSON.parse(saved).default_location_enabled === true
       }
@@ -431,11 +431,11 @@ export function useLocation() {
       const cached = localStorage.getItem("userLocation")
       if (cached) return JSON.parse(cached)
       
-      const savedSettings = localStorage.getItem("fresly_customization_settings")
+      const savedSettings = localStorage.getItem("foodie_customization_settings")
       const isEnabled = savedSettings ? JSON.parse(savedSettings).default_location_enabled === true : false
       return isEnabled ? TEMPORARY_DEFAULT_INDORE_LOCATION : null
     } catch {
-      const savedSettings = localStorage.getItem("fresly_customization_settings")
+      const savedSettings = localStorage.getItem("foodie_customization_settings")
       const isEnabled = savedSettings ? JSON.parse(savedSettings).default_location_enabled === true : false
       return isEnabled ? TEMPORARY_DEFAULT_INDORE_LOCATION : null
     }
@@ -445,7 +445,7 @@ export function useLocation() {
   useEffect(() => {
     const handleSettingsLoaded = () => {
       try {
-        const saved = localStorage.getItem("fresly_customization_settings")
+        const saved = localStorage.getItem("foodie_customization_settings")
         if (saved) {
           const enabled = JSON.parse(saved).default_location_enabled === true
           setIsDefaultLocationMode(enabled)

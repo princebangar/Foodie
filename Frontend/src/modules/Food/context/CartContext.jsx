@@ -770,7 +770,7 @@ export function CartProvider({ children }) {
     () => ({
       _isProvider: true,
       cart: normalizedCart,
-      // Fresly compatibility: delivery/takeaway share the same server cart when logged in.
+      // Foodie compatibility: delivery/takeaway share the same server cart when logged in.
       deliveryCart: normalizedCart,
       takeawayCart: normalizedCart,
       items: cartForAnimation.items,

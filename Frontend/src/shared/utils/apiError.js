@@ -270,18 +270,18 @@ function scrubNativeApiErrorBanner(el) {
  */
 export function installNativeApiErrorBridge() {
   if (typeof window === "undefined") return;
-  if (window.__freslyNativeApiErrorBridgeInstalled) return;
-  window.__freslyNativeApiErrorBridgeInstalled = true;
+  if (window.__foodieNativeApiErrorBridgeInstalled) return;
+  window.__foodieNativeApiErrorBridgeInstalled = true;
 
   const handlePayload = (payload) => {
     if (payload == null) return;
     showNativeShellApiError(payload);
   };
 
-  window.freslyOnNativeApiError = handlePayload;
+  window.foodieOnNativeApiError = handlePayload;
   window.handleNativeApiError = handlePayload;
   window.showApiErrorToast = handlePayload;
-  window.__freslyHandleNativeApiError = handlePayload;
+  window.__foodieHandleNativeApiError = handlePayload;
 
   window.addEventListener("message", (event) => {
     const data = event?.data;
@@ -297,7 +297,7 @@ export function installNativeApiErrorBridge() {
     }
   });
 
-  window.addEventListener("fresly:native-api-error", (event) => {
+  window.addEventListener("foodie:native-api-error", (event) => {
     handlePayload(event?.detail);
   });
 
