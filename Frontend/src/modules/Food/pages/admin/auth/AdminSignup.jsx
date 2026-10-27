@@ -12,7 +12,7 @@ import {
 import { Input } from "@food/components/ui/input"
 import { Label } from "@food/components/ui/label"
 import { Mail, User, Lock, Eye, EyeOff, ArrowLeft, Shield } from "lucide-react"
-import { brandLogo } from "@food/constants/brand"
+import { brandIcon } from "@food/constants/brand"
 import { authAPI, adminAPI } from "@food/api"
 import { setAuthData } from "@food/utils/auth"
 import { loadBusinessSettings } from "@food/utils/businessSettings"
@@ -36,7 +36,7 @@ export default function AdminSignup() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const [resendTimer, setResendTimer] = useState(0)
-  const [logoUrl, setLogoUrl] = useState(brandLogo)
+  const [logoUrl, setLogoUrl] = useState(brandIcon)
   const inputRefs = useRef(Array(6).fill(null).map(() => null))
 
   // Fetch business settings logo on mount
@@ -247,14 +247,14 @@ export default function AdminSignup() {
             <div className="flex w-full items-center gap-4 sm:gap-5">
               <div className="flex h-14 w-28 shrink-0 items-center justify-center rounded-xl bg-gray-900/5 ring-1 ring-neutral-200">
                 <img
-                  src={logoUrl || brandLogo}
+                  src={logoUrl || brandIcon}
                   alt="Logo"
                   className="h-10 w-24 object-contain"
                   loading="lazy"
                   onError={(e) => {
                     // Fallback to default logo if business logo fails to load
-                    if (e.target.src !== brandLogo) {
-                      e.target.src = brandLogo
+                    if (e.target.src !== brandIcon) {
+                      e.target.src = brandIcon
                     }
                   }}
                 />

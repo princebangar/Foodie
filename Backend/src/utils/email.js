@@ -61,19 +61,19 @@ function getFoodieLogoUrl() {
 
     const frontendUrl = getFrontendUrl();
     if (frontendUrl && !/localhost|127\.0\.0\.1/i.test(frontendUrl)) {
-        return `${frontendUrl}/logo-transparent.webp`;
+        return `${frontendUrl}/logo.png`;
     }
 
-    return 'https://foodieindia.cloud/logo-transparent.webp';
+    return 'https://foodieindia.cloud/logo.png';
 }
 
 function getInlineLogoAttachment() {
     if (cachedInlineLogoAttachment) return cachedInlineLogoAttachment;
 
     const candidatePaths = [
-        resolve(process.cwd(), 'public', 'logo-transparent.webp'),
-        resolve(process.cwd(), '..', 'Frontend', 'public', 'logo-transparent.webp'),
-        resolve(process.cwd(), '..', 'frontend', 'public', 'logo-transparent.webp')
+        resolve(process.cwd(), 'public', 'logo.png'),
+        resolve(process.cwd(), '..', 'Frontend', 'public', 'logo.png'),
+        resolve(process.cwd(), '..', 'frontend', 'public', 'logo.png')
     ];
 
     const logoPath = candidatePaths.find((p) => existsSync(p));
@@ -82,9 +82,9 @@ function getInlineLogoAttachment() {
     try {
         const content = readFileSync(logoPath);
         cachedInlineLogoAttachment = {
-            filename: 'foodie-logo.webp',
+            filename: 'foodie-logo.png',
             content,
-            contentType: 'image/webp',
+            contentType: 'image/png',
             cid: 'foodie-logo'
         };
         return cachedInlineLogoAttachment;

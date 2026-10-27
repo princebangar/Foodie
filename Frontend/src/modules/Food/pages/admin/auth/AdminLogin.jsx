@@ -228,7 +228,7 @@ export default function AdminLogin() {
           {/* Logo */}
           <div className="w-[110px] md:w-[150px] mb-4 select-none flex justify-center items-center md:items-start">
              <img
-              src="/logo-transparent.webp"
+              src="/logo.png"
               alt="FOODIE Logo"
               className="w-full object-contain rounded-xl shadow-lg border border-white/10 md:border-white/5"
             />

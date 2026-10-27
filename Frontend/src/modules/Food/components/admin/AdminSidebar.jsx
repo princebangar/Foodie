@@ -58,7 +58,7 @@ import { filterSidebarMenuByPermissions } from "@food/utils/subAdminPermissions"
 import { getCurrentUser } from "@food/utils/auth"
 import { adminAPI } from "@food/api"
 import { dispatchAdminNotificationsUpdated } from "@food/hooks/useAdminNotifications"
-import { brandLogo } from "@food/constants/brand"
+import { brandIcon } from "@food/constants/brand"
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
@@ -952,13 +952,13 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
                 <div className="w-24 h-12 rounded-lg flex items-center justify-center shadow-black/20">
                   {logoUrl ? (
                     <img
-                      src={logoUrl || brandLogo}
+                      src={logoUrl || brandIcon}
                       alt={companyName || "Company"}
                       className="w-24 h-10 object-contain"
                       loading="lazy"
                       onError={(e) => {
-                        if (e.target.src !== brandLogo) {
-                          e.target.src = brandLogo
+                        if (e.target.src !== brandIcon) {
+                          e.target.src = brandIcon
                         }
                       }}
                     />
@@ -967,7 +967,7 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
                       {companyName}
                     </span>
                   ) : (
-                    <img src={brandLogo} alt="Company" className="w-24 h-10 object-contain" loading="lazy" />
+                    <img src={brandIcon} alt="Company" className="w-24 h-10 object-contain" loading="lazy" />
                   )}
                 </div>
               </div>
@@ -977,18 +977,18 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
                 <div className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center shadow-lg shadow-black/20 ring-1 ring-white/10">
                   {logoUrl || companyName ? (
                     <img
-                      src={logoUrl || brandLogo}
+                      src={logoUrl || brandIcon}
                       alt={companyName || "Company"}
                       className="w-10 h-10 object-contain"
                       loading="lazy"
                       onError={(e) => {
-                        if (e.target.src !== brandLogo) {
-                          e.target.src = brandLogo
+                        if (e.target.src !== brandIcon) {
+                          e.target.src = brandIcon
                         }
                       }}
                     />
                   ) : (
-                    <img src={brandLogo} alt="Company" className="w-10 h-10 object-contain" loading="lazy" />
+                    <img src={brandIcon} alt="Company" className="w-10 h-10 object-contain" loading="lazy" />
                   )}
                 </div>
               </div>

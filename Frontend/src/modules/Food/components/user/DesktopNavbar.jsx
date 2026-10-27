@@ -10,7 +10,7 @@ import { useLocationSelector, useSearchOverlay } from "./UserLayout"
 import { useProfile } from "@food/context/ProfileContext"
 import { FaLocationDot } from "react-icons/fa6"
 import { AnimatePresence, motion } from "framer-motion"
-import { brandLogo } from "@food/constants/brand"
+import { brandIcon } from "@food/constants/brand"
 import { getCachedSettings, loadBusinessSettings } from "@food/utils/businessSettings"
 import api from "@food/api"
 import { isModuleAuthenticated } from "@food/utils/auth"
@@ -206,17 +206,17 @@ export default function DesktopNavbar({ showLogo = true }) {
                                 <Link to="/food/user" className="flex items-center justify-center flex-shrink-0">
                                     {logoUrl || companyName ? (
                                         <img
-                                            src={logoUrl || brandLogo}
+                                            src={logoUrl || brandIcon}
                                             alt={companyName || "Company Logo"}
                                             className="h-10 w-auto md:h-14 lg:h-16 object-contain"
                                             onError={(e) => {
-                                                if (e.target.src !== brandLogo) {
-                                                    e.target.src = brandLogo
+                                                if (e.target.src !== brandIcon) {
+                                                    e.target.src = brandIcon
                                                 }
                                             }}
                                         />
                                     ) : (
-                                        <img src={brandLogo} alt={companyName || "Logo"} className="h-10 w-auto md:h-14 lg:h-16 object-contain" />
+                                        <img src={brandIcon} alt={companyName || "Logo"} className="h-10 w-auto md:h-14 lg:h-16 object-contain" />
                                     )}
                                 </Link>
                             )}

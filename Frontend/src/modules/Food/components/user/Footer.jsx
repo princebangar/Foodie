@@ -3,12 +3,12 @@ import { Facebook, Twitter, Instagram, Mail, Phone, MapPin, Heart } from "lucide
 import { useState, useEffect } from "react"
 import { getCachedSettings, loadBusinessSettings } from "@food/utils/businessSettings"
 import { useCompanyName } from "@food/hooks/useCompanyName"
-import { brandLogo } from "@food/constants/brand"
+import { brandIcon } from "@food/constants/brand"
 
 export default function Footer() {
   const companyName = useCompanyName()
   const currentYear = new Date().getFullYear()
-  const [logoUrl, setLogoUrl] = useState(brandLogo)
+  const [logoUrl, setLogoUrl] = useState(brandIcon)
 
   // Load business settings logo
   useEffect(() => {
@@ -82,13 +82,13 @@ export default function Footer() {
             >
               <div className="flex items-center gap-2 mb-4">
                 <img
-                  src={logoUrl || brandLogo}
+                  src={logoUrl || brandIcon}
                   alt="Company Logo"
                   className="h-10 w-10 rounded-full object-cover"
                   crossOrigin="anonymous"
                   onError={(e) => {
-                    if (e.target.src !== brandLogo) {
-                      e.target.src = brandLogo
+                    if (e.target.src !== brandIcon) {
+                      e.target.src = brandIcon
                     }
                   }}
                 />

@@ -171,7 +171,7 @@ export default function MasterLandingPage() {
             className="mb-2"
           >
             <h1 className="text-7xl md:text-[110px] font-black italic tracking-tighter drop-shadow-2xl text-white">
-              Red<span className="text-[#D32F2F]">Go</span>
+              <span className="relative inline-block px-[0.22em] text-white"><span aria-hidden="true" className="absolute top-[0.06em] -bottom-[0.05em] inset-x-0 -skew-x-12 rounded-[0.14em] bg-[#E53935] shadow-[0_0.08em_0.35em_rgba(0,0,0,0.5)]" /><span className="relative text-[#F5EEE6]">Foodie</span></span>
             </h1>
           </motion.div>
 
@@ -580,7 +580,7 @@ export default function MasterLandingPage() {
           <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-12">
             <div className="w-full md:w-1/2 text-center md:text-left">
               <h2 className="text-4xl md:text-5xl lg:text-6xl font-black mb-6 leading-tight text-white">
-                Get the <span className="text-white">Red</span><span className="text-[#D32F2F]">Go</span> App
+                Get the <span className="relative inline-block px-[0.22em] text-white"><span aria-hidden="true" className="absolute inset-y-[0.06em] inset-x-0 -skew-x-12 rounded-[0.14em] bg-[#E53935] shadow-[0_0.08em_0.35em_rgba(0,0,0,0.5)]" /><span className="relative">Foodie</span></span> App
               </h2>
               <p className="text-gray-400 text-lg mb-10 max-w-md mx-auto md:mx-0">
                 Download our app for the fastest booking experience, exclusive offers, and live order tracking.
@@ -687,7 +687,8 @@ export default function MasterLandingPage() {
             {/* Brand */}
             <div>
               <div className="flex items-center gap-2 mb-6">
-                <img src="/landing/footer-logo.jpeg" alt="Foodie" className="h-10 object-contain rounded-md" />
+                <img src="/logo-icon.png" alt="Foodie" className="h-10 w-10 object-contain" />
+                <span className="text-xl font-extrabold text-white tracking-tight">Foodie</span>
               </div>
               <p className="text-gray-400 text-sm mb-6 leading-relaxed">
                 India's smartest dining and takeaway platform. Skip the lines, discover new tastes, and dine better.

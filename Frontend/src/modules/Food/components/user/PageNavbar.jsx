@@ -8,7 +8,7 @@ import { useLocationSelector } from "./UserLayout"
 import { openLocationPromptIfNeeded } from "./LocationPrompt"
 import { FaLocationDot } from "react-icons/fa6"
 import { getCachedSettings, loadBusinessSettings } from "@food/utils/businessSettings"
-import { brandLogo } from "@food/constants/brand"
+import { brandIcon } from "@food/constants/brand"
 import { Avatar, AvatarFallback, AvatarImage } from "@food/components/ui/avatar"
 import { useProfile } from "@food/context/ProfileContext"
 import { isModuleAuthenticated } from "@food/utils/auth"
@@ -1047,9 +1047,9 @@ export default function PageNavbar({
               </span>
             ) : (
               <img
-                src={brandLogo}
+                src={brandIcon}
                 alt="Logo"
-                className="h-9 w-auto sm:h-12 md:h-14 object-contain scale-[1.6] sm:scale-[1.8] origin-left"
+                className="h-9 w-auto sm:h-11 md:h-12 object-contain"
               />
             )}
           </Link>

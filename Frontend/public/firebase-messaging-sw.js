@@ -222,8 +222,8 @@ async function showOsNotificationFromPayload(payload) {
 
   await self.registration.showNotification(title, {
     body,
-    icon: "/logo.png",
-    badge: "/logo.png",
+    icon: "/logo-icon.png",
+    badge: "/logo-icon.png",
     image,
     tag: notificationKey || `foodie-${Date.now()}`,
     renotify: data.type === "admin_broadcast",
