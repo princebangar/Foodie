@@ -17,6 +17,9 @@
     "cleanup:legacy-collections": "node scripts/cleanup-legacy-collections.js",
     "migrate:uploads": "node scripts/migrate-cloudinary-to-local.js",
     "migrate:uploads:apply": "node scripts/migrate-cloudinary-to-local.js --apply --clean-empty",
+    "seed:admin": "node scripts/seed-admin.js",
+    "migrate:redgo": "node scripts/migrate-from-redgo.js",
+    "migrate:redgo:apply": "node scripts/migrate-from-redgo.js --apply",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

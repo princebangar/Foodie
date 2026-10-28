@@ -92,7 +92,6 @@ import {
 import { useLocation, resolveServiceCity } from "@food/hooks/useLocation";
 import { useZone } from "@food/hooks/useZone";
 import { brandLogo } from "@food/constants/brand"
-import offerImage from "@food/assets/banners/offerimage.png";
 import api, { publicGetOnce, restaurantAPI, adminAPI } from "@food/api";
 import { API_BASE_URL } from "@food/api/config";
 import OptimizedImage from "@food/components/OptimizedImage";
