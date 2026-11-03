@@ -11,12 +11,13 @@ import FilterPanel from "@food/components/admin/orders/FilterPanel"
 import ViewOrderDialog from "@food/components/admin/orders/ViewOrderDialog"
 import SettingsDialog from "@food/components/admin/orders/SettingsDialog"
 import RefundModal from "@food/components/admin/orders/RefundModal"
+import AssignDeliveryPartnerDialog from "@food/components/admin/orders/AssignDeliveryPartnerDialog"
 import { useOrdersManagement } from "@food/components/admin/orders/useOrdersManagement"
 import { Loader2 } from "lucide-react"
 import { OrdersDashboardSkeleton, TableSkeleton } from "@food/components/ui/loading-skeletons"
 import { refreshSidebarBadges } from "@food/components/admin/AdminSidebar"
-const alertSound = "/restaurant_alert.mp3"
-const originalSound = "/original.mp3"
+// Admin's own "tick tick" order alert (restaurant_alert.mp3 is the restaurant app's sound).
+const alertSound = "/alert.mp3"
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
@@ -59,6 +60,7 @@ export default function OrdersPage({ statusKey = "all" }) {
   const [deletingOrderId, setDeletingOrderId] = useState(null)
   const [refundModalOpen, setRefundModalOpen] = useState(false)
   const [selectedOrderForRefund, setSelectedOrderForRefund] = useState(null)
+  const [assignOrder, setAssignOrder] = useState(null)
   const seenOrderIdsRef = useRef(new Set())
   const isFirstLoadRef = useRef(true)
   const fallbackAudioRef = useRef(null)
@@ -82,10 +84,8 @@ export default function OrdersPage({ statusKey = "all" }) {
   }, [])
 
   const playDeliveryStyleBuzz = useCallback(async () => {
-    const selectedSound = localStorage.getItem("delivery_alert_sound") || "zomato_tone"
-    const soundFile = selectedSound === "original"
-      ? resolveAudioSource(originalSound, "admin-original")
-      : resolveAudioSource(alertSound, "admin-alert")
+    // Always the admin alert; the rider app's "delivery_alert_sound" setting does not apply here.
+    const soundFile = resolveAudioSource(alertSound, "admin-alert")
 
     try {
       if (!notificationAudioRef.current) {
@@ -265,10 +265,7 @@ export default function OrdersPage({ statusKey = "all" }) {
         fallbackAudioRef.current.muted = false
 
         if (!notificationAudioRef.current) {
-          const selectedSound = localStorage.getItem("delivery_alert_sound") || "zomato_tone"
-          const soundFile = selectedSound === "original"
-            ? resolveAudioSource(originalSound, "admin-original")
-            : resolveAudioSource(alertSound, "admin-alert")
+          const soundFile = resolveAudioSource(alertSound, "admin-alert")
           notificationAudioRef.current = new Audio(soundFile)
           notificationAudioRef.current.preload = "auto"
           notificationAudioRef.current.volume = 1
@@ -478,6 +475,8 @@ export default function OrdersPage({ statusKey = "all" }) {
             if (base == null) base = selling
 
             return {
+              itemId: item.itemId || "",
+              isBogoFree: item.isBogoFree === true,
               quantity: item.quantity || 1,
               name: item.name || item.foodName || item.title || "Item",
               price: selling,
@@ -552,10 +551,19 @@ export default function OrdersPage({ statusKey = "all" }) {
         orderStatus: displayStatus,
         deliveryPartnerName,
         deliveryPartnerPhone,
-        deliveryType: order.deliveryType || "Home Delivery",
+        riderEarning: Number(order.riderEarning || 0),
+        distanceKm: order.distanceKm ?? null,
+        distanceMode: order.distanceMode || null,
+        deliveryType:
+          order.orderType === "takeaway"
+            ? "Takeaway"
+            : order.orderType === "dining"
+              ? "Dine In"
+              : "Home Delivery",
         orderOtp: order.deliveryOtp,
         address: order.address || order.customerAddress || order.deliveryAddress,
-        refundStatus: order.payment?.refund?.status || (order.payment?.status === 'refunded' ? 'processed' : null)
+        refundStatus: order.payment?.refund?.status || (order.payment?.status === 'refunded' ? 'processed' : null),
+        refundDestination: order.payment?.refund?.destination || null
       }
     })
   }, [orders])
@@ -955,27 +963,14 @@ export default function OrdersPage({ statusKey = "all" }) {
   }
 
   // Handle refund button click - show modal for wallet payments, confirm dialog for others
+  // Always open the modal so admin can choose Foodie wallet or bank
   const handleRefund = (order) => {
-    const isWalletPayment = order.paymentType === "Wallet" || order.payment?.method === "wallet";
-    
-    if (isWalletPayment) {
-      // Show modal for wallet refunds
-      setSelectedOrderForRefund(order)
-      setRefundModalOpen(true)
-    } else {
-      // For non-wallet payments, use the old confirm dialog flow
-      const confirmMessage = `Are you sure you want to process refund for order ${order.orderId}?\n\nThis will initiate a Razorpay refund to the customer's original payment method.`;
-      
-      if (!confirm(confirmMessage)) {
-        return
-      }
-      
-      processRefund(order, null) // null amount means use default
-    }
+    setSelectedOrderForRefund(order)
+    setRefundModalOpen(true)
   }
 
   // Process refund with amount
-  const processRefund = async (order, refundAmount = null) => {
+  const processRefund = async (order, refundAmount = null, destination = "wallet") => {
     // Try using MongoDB _id first (more reliable for route matching), then fallback to orderId string
     // Backend accepts either MongoDB ObjectId (24 chars) or orderId string
     // Using MongoDB _id is more reliable for route matching (no dashes/special chars)
@@ -1008,7 +1003,7 @@ export default function OrdersPage({ statusKey = "all" }) {
       })
       
       // Include refundAmount in request body if provided (ensure it's a number)
-      const requestData = refundAmount !== null ? { refundAmount: parseFloat(refundAmount) } : {}
+      const requestData = { destination, ...(refundAmount !== null ? { refundAmount: parseFloat(refundAmount) } : {}) }
       debugLog('?? Request data being sent:', requestData)
       const response = await adminAPI.processRefund(orderIdToUse, requestData)
       
@@ -1021,7 +1016,7 @@ export default function OrdersPage({ statusKey = "all" }) {
         setOrders(prevOrders => 
           prevOrders.map(o => 
             (o.id === order.id || o.orderId === order.orderId)
-              ? { ...o, refundStatus: 'processed' } // Wallet refunds are instant, so mark as processed
+              ? { ...o, refundStatus: 'processed', refundDestination: destination === 'source' ? 'source' : 'wallet' }
               : o
           )
         )
@@ -1087,9 +1082,9 @@ export default function OrdersPage({ statusKey = "all" }) {
   }
 
   // Handle refund confirmation from modal
-  const handleRefundConfirm = (amount) => {
+  const handleRefundConfirm = (amount, destination) => {
     if (selectedOrderForRefund) {
-      processRefund(selectedOrderForRefund, amount)
+      processRefund(selectedOrderForRefund, amount, destination)
     }
   }
 
@@ -1159,6 +1154,11 @@ export default function OrdersPage({ statusKey = "all" }) {
               })
               fetchOrders({ silent: true, withRingCheck: false })
             }}
+            onRefundToBank={(order) => {
+              // Close the details popup first so the refund modal isn't stacked under it.
+              setIsViewOrderOpen(false)
+              handleRefund(order)
+            }}
           />
           <RefundModal
             isOpen={refundModalOpen}
@@ -1167,7 +1167,13 @@ export default function OrdersPage({ statusKey = "all" }) {
             onConfirm={handleRefundConfirm}
             isProcessing={processingRefund !== null}
           />
-          <OrdersTable 
+          <AssignDeliveryPartnerDialog
+            isOpen={Boolean(assignOrder)}
+            onOpenChange={(open) => { if (!open) setAssignOrder(null) }}
+            order={assignOrder}
+            onAssigned={() => fetchOrders({ silent: true, withRingCheck: false })}
+          />
+          <OrdersTable
             orders={filteredOrders} 
             visibleColumns={visibleColumns}
             onViewOrder={handleViewOrder}
@@ -1175,6 +1181,7 @@ export default function OrdersPage({ statusKey = "all" }) {
             onRefund={handleRefund}
             onAcceptOrder={(statusKey === "all" || statusKey === "pending") ? handleAcceptOrder : undefined}
             onRejectOrder={(statusKey === "all" || statusKey === "pending") ? handleRejectOrder : undefined}
+            onAssignPartner={setAssignOrder}
             actionLoadingOrderId={processingActionOrderId}
             actionLoadingType={actionLoadingType}
             deletingOrderId={deletingOrderId}

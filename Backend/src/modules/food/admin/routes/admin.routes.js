@@ -14,6 +14,8 @@ import * as systemConfigController from '../controllers/systemConfig.controller.
 import { upload } from '../../../../middleware/upload.js';
 import { enforceSubAdminPermissions } from '../middleware/subAdminPermission.middleware.js';
 import * as otherPriceController from '../controllers/otherPrice.controller.js';
+import * as comboOfferController from '../controllers/comboOffer.controller.js';
+import * as bogoOfferController from '../controllers/bogoOffer.controller.js';
 
 const router = express.Router();
 
@@ -144,6 +146,34 @@ router.put('/offers/:id', adminController.updateAdminOffer);
 router.patch('/offers/:id/cart-visibility', adminController.updateAdminOfferCartVisibility);
 router.delete('/offers/:id', adminController.deleteAdminOffer);
 
+// ----- Combo Offers (home page slider) -----
+router.get('/combo-offers', comboOfferController.listComboOffers);
+router.get('/combo-offers/search-foods', comboOfferController.searchComboFoods);
+router.post('/combo-offers', comboOfferController.createComboOffer);
+router.post('/combo-offers/bulk', comboOfferController.bulkAddComboOffers);
+router.post('/combo-offers/bulk-remove', comboOfferController.bulkRemoveComboOffers);
+router.delete('/combo-offers/:id', comboOfferController.deleteComboOffer);
+router.patch('/combo-offers/:id/order', comboOfferController.updateComboOrder);
+router.patch('/combo-offers/:id/status', comboOfferController.toggleComboStatus);
+
+// ----- Buy One Get One (BOGO) Offers -----
+router.get('/bogo-offers', bogoOfferController.listBogoOffers);
+router.get('/bogo-offers/search-foods', bogoOfferController.searchBogoFoods);
+router.get('/bogo-offers/defaults', bogoOfferController.getBogoDefaults);
+router.put('/bogo-offers/defaults', bogoOfferController.saveBogoDefaults);
+router.post('/bogo-offers', bogoOfferController.createBogoOffer);
+router.post('/bogo-offers/bulk', bogoOfferController.bulkAddBogoOffers);
+router.post('/bogo-offers/bulk-remove', bogoOfferController.bulkRemoveBogoOffers);
+router.post('/bogo-offers/by-filter/add', bogoOfferController.addBogoByFilter);
+router.post('/bogo-offers/by-filter/remove', bogoOfferController.removeBogoByFilter);
+router.get('/bogo-offers/restaurants',bogoOfferController.listBogoRestaurantsHandler);
+router.post('/bogo-offers/restaurants/add', bogoOfferController.addBogoRestaurants);
+router.post('/bogo-offers/restaurants/remove', bogoOfferController.removeBogoRestaurants);
+router.delete('/bogo-offers/:id', bogoOfferController.deleteBogoOffer);
+router.patch('/bogo-offers/:id/order', bogoOfferController.updateBogoOrder);
+router.patch('/bogo-offers/:id/limit', bogoOfferController.updateBogoLimit);
+router.patch('/bogo-offers/:id/status', bogoOfferController.toggleBogoStatus);
+
 // ----- Feedback Experience (Admin) -----
 router.get('/feedback-experiences', feedbackExperienceController.getFeedbackExperiences);
 router.delete('/feedback-experiences/:id', feedbackExperienceController.deleteFeedbackExperience);
@@ -248,6 +278,8 @@ router.delete('/orders/:orderId', orderController.deleteOrderAdminController);
 router.patch('/orders/:orderId/accept', orderController.acceptOrderAdminController);
 router.patch('/orders/:orderId/reject', orderController.rejectOrderAdminController);
 router.patch('/orders/:orderId/statuses', orderController.updateOrderStatusesAdminController);
+router.get('/orders/:orderId/assignable-partners', orderController.listAssignablePartnersAdminController);
+router.patch('/orders/:orderId/assign-partner', orderController.assignDeliveryPartnerController);
 
 // ----- CMS Pages (About + legal) -----
 router.get('/pages-social-media/:key', getAdminPageController);

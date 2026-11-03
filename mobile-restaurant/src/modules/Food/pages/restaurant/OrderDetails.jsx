@@ -21,6 +21,8 @@ import { restaurantAPI } from '@food/api';
 import ResendNotificationButton from '@food/components/restaurant/ResendNotificationButton';
 import { getRestaurantItemLineTotal, resolveRestaurantItemUnitPrice } from '@food/utils/restaurantOrderPricing';
 import dishFallbackImage from '@food/assets/dish_fallback.webp';
+import { isBogoFreeLine, bogoDishName, getBogoFreeUnitValue } from '@food/utils/bogo';
+import { BogoBadge, BogoFreePrice, BogoBillRow } from '@food/components/BogoOrderBits';
 
 const debugError = () => {};
 
@@ -116,7 +118,7 @@ function buildReceiptHtml(orderData) {
   <${'h3'}>ITEM DETAILS</${'h3'}>
   <${'table'}><thead><${'tr'}><${'th'}>Qty</${'th'}><${'th'}>Item Name</${'th'}><${'th'}>Type</${'th'}><${'th'}>Price</${'th'}></${'tr'}></thead><tbody>
   ${orderData.items
-    .map((item) => `<${'tr'}><${'td'}>${esc(`${item.quantity}x`)}</${'td'}><${'td'}>${esc(item.name)}</${'td'}><${'td'}>${esc(item.type || '-')}</${'td'}><${'td'}>${esc(formatMoney(item.price))}</${'td'}></${'tr'}>`)
+    .map((item) => `<${'tr'}><${'td'}>${esc(`${item.quantity}x`)}</${'td'}><${'td'}>${esc(isBogoFreeLine(item) ? `${bogoDishName(item)} (Buy 1 Get 1 offer)` : item.name)}</${'td'}><${'td'}>${esc(item.type || '-')}</${'td'}><${'td'}>${esc(isBogoFreeLine(item) ? 'FREE' : formatMoney(item.price))}</${'td'}></${'tr'}>`)
     .join('')}
   </tbody></${'table'}>
   <${'hr'}/>
@@ -351,6 +353,9 @@ export default function OrderDetails() {
             },
             items:
               order.items?.map((item) => ({
+                itemId: item.itemId || '',
+                variantId: item.variantId || '',
+                isBogoFree: item.isBogoFree === true,
                 name: item.name,
                 quantity: item.quantity,
                 price: resolveRestaurantItemUnitPrice(item),
@@ -707,12 +712,18 @@ export default function OrderDetails() {
                         </View>
                         <View style={styles.flex}>
                           <Text style={styles.itemName}>
-                            {item.quantity} x {item.name}
+                            {item.quantity} x {isBogoFreeLine(item) ? bogoDishName(item) : item.name}
                           </Text>
                           {item.variantName ? <Text style={styles.variant}>{item.variantName}</Text> : null}
+                          {isBogoFreeLine(item) ? <BogoBadge style={{ marginTop: sp(1) }} /> : null}
                         </View>
                       </View>
-                      <Text style={styles.itemName}>{formatMoney(item.price)}</Text>
+                      {isBogoFreeLine(item) ? (
+                        // Price column is per unit here, like the paid lines.
+                        <BogoFreePrice unitValue={getBogoFreeUnitValue(orderData.items, item)} />
+                      ) : (
+                        <Text style={styles.itemName}>{formatMoney(item.price)}</Text>
+                      )}
                     </View>
                     {item.type ? <Text style={styles.xsGray}>{item.type}</Text> : null}
                   </View>
@@ -732,6 +743,7 @@ export default function OrderDetails() {
             {Number(orderData.billing.packagingFee) > 0 ? <BillRow label="Packaging fee" value={formatMoney(orderData.billing.packagingFee)} /> : null}
             {Number(orderData.billing.deliveryFee) > 0 ? <BillRow label="Delivery fee" value={formatMoney(orderData.billing.deliveryFee)} /> : null}
             {Number(orderData.billing.platformFee) > 0 ? <BillRow label="Platform fee" value={formatMoney(orderData.billing.platformFee)} /> : null}
+            <BogoBillRow order={orderData} style={{ marginBottom: sp(3) }} />
             {Number(orderData.billing.discount) > 0 ? <BillRow green label="Discount" value={formatDiscount(orderData.billing.discount)} /> : null}
             {Number(orderData.billing.couponDiscount) > 0 ? (
               <BillRow green label="Coupon discount" value={formatDiscount(orderData.billing.couponDiscount)} />

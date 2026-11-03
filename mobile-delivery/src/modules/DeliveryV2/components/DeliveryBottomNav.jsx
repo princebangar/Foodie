@@ -16,7 +16,12 @@ export default function DeliveryBottomNav() {
   const { pathname } = useLocationNow();
   const currentTab = resolveDeliveryTab(pathname) || 'feed';
   const newOrders = useDeliveryStore((state) => state.newOrders);
-  const newOrdersCount = useMemo(() => dedupeOrdersByIdentity(newOrders).length, [newOrders]);
+  const acceptedOrders = useDeliveryStore((state) => state.acceptedOrders);
+  // Badge = pending requests + accepted orders, so an admin-assigned order is visible too (web, 3 Nov).
+  const newOrdersCount = useMemo(
+    () => dedupeOrdersByIdentity(newOrders).length + dedupeOrdersByIdentity(acceptedOrders).length,
+    [newOrders, acceptedOrders],
+  );
   // the tapped tab lights up at once; the screen (and the real route) catches up behind it
   const [pendingTab, setPendingTab] = useState(null);
   useEffect(() => {

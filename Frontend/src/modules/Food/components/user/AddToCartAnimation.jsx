@@ -3,8 +3,11 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useCart } from "@food/context/CartContext";
 import { useProfile } from "@food/context/ProfileContext";
 import { useEffect, useRef, useState } from 'react';
-import { gsap } from 'gsap';
+import { flyToCart, sourceToViewportPoint, isShownOnScreen, FLY_ARRIVE_MS } from "@food/utils/flyToCart";
 import dishFallbackImage from "@food/assets/placeholders/dish_fallback.webp";
+
+/** Cart line ids are "<itemId>::<variantId>"; thumbnails are matched on the dish id alone. */
+const thumbBaseId = (id) => String(id || '').split('::')[0];
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
@@ -15,9 +18,8 @@ const debugError = (...args) => {}
  * AddToCartAnimation Component
  * 
  * A self-contained component that handles:
- * - Fly-to-cart animation when products are added
- * - Bounce-out animation when products are removed
- * - Pulse animation on cart changes
+ * - Fly-to-cart animation when products are added (removals just update the count)
+ * - A small bump on the pill when the dish lands
  * - "View cart" button display at bottom center
  * 
  * This component automatically integrates with the CartContext and
@@ -30,7 +32,7 @@ export default function AddToCartAnimation({
   linkTo = '/food/user/cart',
   dynamicBottom = null,
 }) {
-  const { items, itemCount, total, lastAddEvent, lastRemoveEvent } = useCart();
+  const { items, itemCount, lastAddEvent } = useCart();
   const { orderType } = useProfile();
   const isTakeaway = orderType === 'takeaway';
   // Navigate to the correct cart for the active mode
@@ -38,11 +40,9 @@ export default function AddToCartAnimation({
   const location = useLocation();
   const navigate = useNavigate();
   const linkRef = useRef(null);
-  const [removedProduct, setRemovedProduct] = useState(null);
+  // Always rendered: tells us whether this page is on screen or kept alive in a hidden tab.
+  const anchorRef = useRef(null);
   const [flyingProduct, setFlyingProduct] = useState(null);
-  const removedThumbnailRef = useRef(null);
-  const flyingThumbnailRef = useRef(null);
-  const prevItemsRef = useRef(items);
 
   // Hide pill on cart pages, order pages, and account page (if enabled)
   const iscartPage = location.pathname === '/cart' ||
@@ -53,324 +53,6 @@ export default function AddToCartAnimation({
   const isAccountPage = location.pathname === '/account';
   const shouldHidePill = hideOnPages && (iscartPage || isOrderPage || isAccountPage);
 
-  // Handle removal animation when product is removed
-  useEffect(() => {
-    if (lastRemoveEvent && lastRemoveEvent.sourcePosition && linkRef.current) {
-      const { product, sourcePosition } = lastRemoveEvent;
-
-      // Store the sourcePosition immediately to prevent it from being lost
-      const savedSourcePosition = { ...sourcePosition };
-      const savedProduct = { ...product };
-
-      setRemovedProduct({ product: savedProduct, targetPos: savedSourcePosition });
-
-      // Wait a bit to ensure pill is rendered
-      setTimeout(() => {
-        if (removedThumbnailRef.current && linkRef.current) {
-          const thumbnail = removedThumbnailRef.current;
-          // Get fresh position of the pill (viewport-relative)
-          const pillRect = linkRef.current.getBoundingClientRect();
-          // Start position: center of the pill (where thumbnails are)
-          const startX = pillRect.left + 16; // Approximate position of first thumbnail
-          const startY = pillRect.top + pillRect.height / 2; // Vertical center of pill
-
-          // Calculate current viewport position accounting for scroll changes
-          // Check multiple sources to get accurate scroll position
-          const getScrollX = () => {
-            if (window.scrollX !== undefined) return window.scrollX
-            if (window.pageXOffset !== undefined) return window.pageXOffset
-            if (document.documentElement && document.documentElement.scrollLeft !== undefined) {
-              return document.documentElement.scrollLeft
-            }
-            if (document.body && document.body.scrollLeft !== undefined) {
-              return document.body.scrollLeft
-            }
-            return 0
-          }
-
-          const getScrollY = () => {
-            if (window.scrollY !== undefined) return window.scrollY
-            if (window.pageYOffset !== undefined) return window.pageYOffset
-            if (document.documentElement && document.documentElement.scrollTop !== undefined) {
-              return document.documentElement.scrollTop
-            }
-            if (document.body && document.body.scrollTop !== undefined) {
-              return document.body.scrollTop
-            }
-            return 0
-          }
-
-          const currentScrollX = getScrollX()
-          const currentScrollY = getScrollY()
-
-          // Determine target position (support both new format with viewportX/Y and old format with x/y)
-          let targetX, targetY
-
-          if (savedSourcePosition.viewportX !== undefined && savedSourcePosition.viewportY !== undefined) {
-            // New format: stored viewport position + scroll at capture time
-            // Adjust for scroll changes since capture
-            const scrollDeltaX = currentScrollX - (savedSourcePosition.scrollX || 0)
-            const scrollDeltaY = currentScrollY - (savedSourcePosition.scrollY || 0)
-            // If page scrolled right/down, button moved left/up in viewport
-            targetX = savedSourcePosition.viewportX - scrollDeltaX
-            targetY = savedSourcePosition.viewportY - scrollDeltaY
-          } else {
-            // Old format: document-relative position (backward compatibility)
-            targetX = savedSourcePosition.x - currentScrollX
-            targetY = savedSourcePosition.y - currentScrollY
-          }
-
-          // Calculate thumbnail center offset (16px = half of 32px thumbnail)
-          const thumbnailCenterOffset = 16;
-
-          // Position at pill location initially (viewport-relative)
-          gsap.set(thumbnail, {
-            position: 'fixed',
-            left: startX - thumbnailCenterOffset,
-            top: startY - thumbnailCenterOffset,
-            zIndex: 1000,
-            scale: 1,
-            rotation: 0,
-            opacity: 1,
-            width: '32px',
-            height: '32px',
-            borderRadius: '50%',
-            x: 0,
-            y: 0,
-          });
-
-          // Calculate relative movement from pill to source position
-          // Both positions are now viewport-relative
-          const deltaX = targetX - startX;
-          const deltaY = targetY - startY;
-
-          // Fly back to source animation
-          const tl = gsap.timeline({
-            onComplete: () => {
-              setRemovedProduct(null);
-            },
-          });
-
-          // Step 1: Pop out from pill (scale up slightly)
-          tl.to(thumbnail, {
-            scale: 1.3,
-            duration: 0.15,
-            ease: 'power2.out',
-          })
-            // Step 2: Fly towards source with rotation
-            .to(thumbnail, {
-              x: deltaX * 0.98, // Slight overshoot for bounce
-              y: deltaY,
-              rotation: -360,
-              scale: 1.1,
-              duration: 0.4,
-              ease: 'power2.inOut',
-            })
-            // Step 3: Bounce back slightly
-            .to(thumbnail, {
-              x: deltaX,
-              y: deltaY,
-              scale: 0.9,
-              duration: 0.15,
-              ease: 'power2.out',
-            })
-            // Step 4: Final bounce into position
-            .to(thumbnail, {
-              scale: 0.85,
-              duration: 0.1,
-              ease: 'power2.in',
-            })
-            // Step 5: Fade out smoothly
-            .to(thumbnail, {
-              scale: 0.7,
-              opacity: 0,
-              duration: 0.15,
-              ease: 'power2.in',
-            });
-        }
-      }, 10);
-    }
-  }, [lastRemoveEvent]);
-
-  // Handle fly-to-cart animation when product is added
-  useEffect(() => {
-    if (lastAddEvent && lastAddEvent.sourcePosition && linkRef.current) {
-      const { product, sourcePosition } = lastAddEvent;
-
-      // Store the sourcePosition immediately to prevent it from being lost
-      const savedSourcePosition = { ...sourcePosition };
-      const savedProduct = { ...product };
-
-      setFlyingProduct({ product: savedProduct, startPos: savedSourcePosition });
-
-      // Wait a bit longer to ensure pill is fully rendered and in position
-      setTimeout(() => {
-        if (flyingThumbnailRef.current && linkRef.current) {
-          const thumbnail = flyingThumbnailRef.current;
-          // Get fresh position after pill animation completes
-          const pillRect = linkRef.current.getBoundingClientRect();
-          // Target position: center of the pill (viewport-relative)
-          const endX = pillRect.left + pillRect.width / 2; // Horizontal center of pill
-          const endY = pillRect.top + pillRect.height / 2; // Vertical center of pill
-
-          // Calculate current viewport position accounting for scroll changes
-          // Check multiple sources to get accurate scroll position
-          const getScrollX = () => {
-            if (window.scrollX !== undefined) return window.scrollX
-            if (window.pageXOffset !== undefined) return window.pageXOffset
-            if (document.documentElement && document.documentElement.scrollLeft !== undefined) {
-              return document.documentElement.scrollLeft
-            }
-            if (document.body && document.body.scrollLeft !== undefined) {
-              return document.body.scrollLeft
-            }
-            return 0
-          }
-
-          const getScrollY = () => {
-            if (window.scrollY !== undefined) return window.scrollY
-            if (window.pageYOffset !== undefined) return window.pageYOffset
-            if (document.documentElement && document.documentElement.scrollTop !== undefined) {
-              return document.documentElement.scrollTop
-            }
-            if (document.body && document.body.scrollTop !== undefined) {
-              return document.body.scrollTop
-            }
-            return 0
-          }
-
-          const currentScrollX = getScrollX()
-          const currentScrollY = getScrollY()
-
-          // Determine source position (support both new format with viewportX/Y and old format with x/y)
-          let sourceX, sourceY
-
-          if (savedSourcePosition.viewportX !== undefined && savedSourcePosition.viewportY !== undefined) {
-            // New format: stored viewport position + scroll at capture time
-            // Adjust for scroll changes since capture
-            const scrollDeltaX = currentScrollX - (savedSourcePosition.scrollX || 0)
-            const scrollDeltaY = currentScrollY - (savedSourcePosition.scrollY || 0)
-            // If page scrolled right/down, button moved left/up in viewport
-            sourceX = savedSourcePosition.viewportX - scrollDeltaX
-            sourceY = savedSourcePosition.viewportY - scrollDeltaY
-          } else {
-            // Old format: document-relative position (backward compatibility)
-            sourceX = savedSourcePosition.x - currentScrollX
-            sourceY = savedSourcePosition.y - currentScrollY
-          }
-
-          // Calculate thumbnail center offset (16px = half of 32px thumbnail)
-          const thumbnailCenterOffset = 16;
-
-          // Position at source (center of button) - use viewport-relative position
-          // Set initial position so the center of thumbnail is at sourcePosition
-          gsap.set(thumbnail, {
-            position: 'fixed',
-            left: sourceX - thumbnailCenterOffset,
-            top: sourceY - thumbnailCenterOffset,
-            zIndex: 1000,
-            scale: 1,
-            rotation: 0,
-            opacity: 1,
-            width: '32px',
-            height: '32px',
-            borderRadius: '50%', // Ensure circular
-            x: 0,
-            y: 0,
-          });
-
-          // Fly to cart animation with bounce
-          const tl = gsap.timeline({
-            onComplete: () => {
-              setFlyingProduct(null);
-            },
-          });
-
-          // Calculate relative movement from source center to target center
-          // Both positions are now viewport-relative, so delta is direct
-          const deltaX = endX - sourceX;
-          const deltaY = endY - sourceY;
-
-          // Step 1: Pop out from button (scale up slightly)
-          tl.to(thumbnail, {
-            scale: 1.3,
-            duration: 0.15,
-            ease: 'power2.out',
-          })
-            // Step 2: Fly towards cart with rotation (no Y overshoot to prevent going below)
-            .to(thumbnail, {
-              x: deltaX * 0.98, // Slight X overshoot for bounce
-              y: deltaY, // No overshoot on Y to prevent going below pill
-              rotation: 360,
-              scale: 1.1,
-              duration: 0.4,
-              ease: 'power2.inOut',
-            })
-            // Step 3: Bounce back slightly on X only (overshoot correction)
-            .to(thumbnail, {
-              x: deltaX,
-              y: deltaY, // Keep Y at exact target
-              scale: 0.9,
-              duration: 0.15,
-              ease: 'power2.out',
-            })
-            // Step 4: Final bounce into position
-            .to(thumbnail, {
-              scale: 0.85,
-              duration: 0.1,
-              ease: 'power2.in',
-            })
-            // Step 5: Fade out smoothly
-            .to(thumbnail, {
-              scale: 0.7,
-              opacity: 0,
-              duration: 0.15,
-              ease: 'power2.in',
-            });
-        }
-      }, 150); // Increased delay to ensure pill animation completes
-    }
-  }, [lastAddEvent]);
-
-  // Enhanced GSAP pulse animation when cart changes (but not on removal or fly-to-cart)
-  useEffect(() => {
-    if (itemCount > 0 && linkRef.current && !removedProduct && !flyingProduct && !lastRemoveEvent) {
-      // Kill any existing animations first
-      gsap.killTweensOf(linkRef.current);
-
-      // Enhanced pulse animation with glow effect
-      const tl = gsap.timeline();
-
-      // Step 1: Scale up with glow
-      tl.to(linkRef.current, {
-        scale: 1.08,
-        boxShadow: '0 10px 25px rgba(220, 38, 38, 0.4)',
-        duration: 0.15,
-        ease: 'power2.out',
-        transformOrigin: 'center center',
-        force3D: true,
-      })
-        // Step 2: Bounce back
-        .to(linkRef.current, {
-          scale: 1.0,
-          boxShadow: '0 4px 12px rgba(220, 38, 38, 0.3)',
-          duration: 0.2,
-          ease: 'power2.inOut',
-        })
-        // Step 3: Subtle second pulse
-        .to(linkRef.current, {
-          scale: 1.04,
-          duration: 0.1,
-          ease: 'power1.out',
-        })
-        .to(linkRef.current, {
-          scale: 1.0,
-          duration: 0.15,
-          ease: 'power1.in',
-        });
-    }
-  }, [itemCount, total, removedProduct, flyingProduct, lastRemoveEvent]);
-
   // Get up to 3 most recently added items for thumbnails
   // Since items are added to the end of the array, we take the last 3
   const safeItems = Array.isArray(items) ? items : [];
@@ -378,59 +60,52 @@ export default function AddToCartAnimation({
     .slice(-3)
     .reverse()
     .filter((item) => item && typeof item === 'object');
+  // Dishes whose photo was already in the pill before this render (read by the add effect below).
+  const shownThumbIdsRef = useRef(new Set());
+
+  // Dish added (ADD or +): fly its photo from the button into the pill. Only adds animate;
+  // removing just updates the count. Runs off the main thread, so it stays smooth.
+  useEffect(() => {
+    const from = sourceToViewportPoint(lastAddEvent?.sourcePosition)
+    if (!from) return undefined
+    // Hidden kept-alive page (e.g. Under250 tab behind another page): only the visible page flies.
+    if (!isShownOnScreen(anchorRef.current)) return undefined
+    const key = `${Date.now()}-${Math.random()}`
+    const productId = String(lastAddEvent.product?.id || '')
+    // "+" on a dish already in the pill: its photo stays put; only a new dish waits for the flight.
+    if (!shownThumbIdsRef.current.has(thumbBaseId(productId))) {
+      setFlyingProduct({ key, product: { ...lastAddEvent.product } })
+    }
+    // One frame so a pill that just mounted (first item) is laid out before we aim at it.
+    const raf = requestAnimationFrame(() => {
+      const pillRect = linkRef.current?.getBoundingClientRect()
+      const to = pillRect
+        ? { x: pillRect.left + 22, y: pillRect.top + pillRect.height / 2 }
+        : { x: window.innerWidth / 2, y: window.innerHeight - (bottomOffset || 20) - 24 }
+      flyToCart({ image: lastAddEvent.product?.imageUrl, from, to })
+      // Show the thumbnail the moment the flying photo reaches the pill, not after it fades out.
+      setTimeout(() => {
+        setFlyingProduct((current) => (current?.key === key ? null : current))
+      }, FLY_ARRIVE_MS)
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [lastAddEvent]);
+
+  useEffect(() => {
+    shownThumbIdsRef.current = new Set(
+      thumbnailItems.map((item) => thumbBaseId(item?.itemId || item?.id)),
+    );
+  });
+
+  const flyingId = flyingProduct ? String(flyingProduct.product?.id || '') : '';
 
   return (
     <>
-      {/* Removed product thumbnail - flying back to source */}
-      {removedProduct && (
-        <div
-          ref={removedThumbnailRef}
-          className="w-8 h-8 rounded-full border-2 border-white overflow-hidden bg-white flex-shrink-0 shadow-lg"
-          style={{
-            borderRadius: '50%',
-            objectFit: 'cover',
-          }}
-        >
-          <img
-            src={removedProduct?.image || removedProduct?.product?.imageUrl || dishFallbackImage}
-            alt={removedProduct?.name || removedProduct?.product?.name || 'Item'}
-            className="w-full h-full object-cover rounded-full"
-            onError={(e) => {
-              if (e.currentTarget.src !== dishFallbackImage) {
-                e.currentTarget.src = dishFallbackImage
-              }
-            }}
-          />
-        </div>
-      )}
-
-      {/* Flying product thumbnail - going to cart */}
-      {flyingProduct && (
-        <div
-          ref={flyingThumbnailRef}
-          className="w-8 h-8 rounded-full border-2 border-white overflow-hidden bg-white flex-shrink-0 shadow-lg"
-          style={{
-            borderRadius: '50%',
-            objectFit: 'cover',
-          }}
-        >
-          <img
-            src={flyingProduct?.image || flyingProduct?.product?.imageUrl || dishFallbackImage}
-            alt={flyingProduct?.name || flyingProduct?.product?.name || 'Item'}
-            className="w-full h-full object-cover rounded-full"
-            onError={(e) => {
-              if (e.currentTarget.src !== dishFallbackImage) {
-                e.currentTarget.src = dishFallbackImage
-              }
-            }}
-          />
-        </div>
-      )}
-
+      <span ref={anchorRef} aria-hidden="true" className="sr-only" />
       <AnimatePresence>
         {itemCount > 0 && !shouldHidePill && (
           <motion.div
-            initial={{ y: 60, opacity: 0, scale: 0.8 }}
+            initial={{ y: 0, opacity: 0, scale: 0.8 }}
             animate={{
               y: 0,
               opacity: 1,
@@ -464,18 +139,15 @@ export default function AddToCartAnimation({
               {/* Left: Product thumbnails */}
               <div className="flex items-center -space-x-4">
                 {thumbnailItems.map((item, idx) => {
+                  const isFlying = Boolean(flyingId) && (String(item?.id) === flyingId || String(item?.itemId || '') === thumbBaseId(flyingId))
                   const imgSrc = item?.image || item?.product?.imageUrl || item?.imageUrl || dishFallbackImage
                   return (
                     <motion.div
-                      key={item?.product?.id || item?.id || `thumb-${idx}`}
+                      key={item?.itemId ? `${item.itemId}::${item.variantId || ''}` : (item?.id || `thumb-${idx}`)}
                       initial={{ scale: 0, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      transition={{
-                        delay: idx * 0.1,
-                        type: 'spring',
-                        stiffness: 500,
-                        damping: 25,
-                      }}
+                      animate={{ scale: isFlying ? 0.6 : 1, opacity: isFlying ? 0 : 1 }}
+                      // Short tween, no stagger: the photo appears right as the flying one lands.
+                      transition={{ type: 'tween', duration: 0.15, ease: 'easeOut' }}
                       className="w-7 h-7 rounded-full border-2 border-white/90 overflow-hidden bg-white flex-shrink-0 shadow-md"
                     >
                       <img

@@ -64,10 +64,24 @@ const CUSTOMIZATION_TOGGLES = [
     defaultValue: true,
   },
   {
+    key: "combo_offers_enabled",
+    label: "Combo Offers",
+    description:
+      "Shows the Combo Offers slider on the user home page and the Combo Offers chip on restaurant pages. When OFF, both are hidden for users; the admin Combo Offers list stays as it is.",
+    defaultValue: true,
+  },
+  {
     key: "maintenance_mode_enabled",
     label: "Under Maintenance",
     description:
       "When ON, user / restaurant / delivery apps show the Under Maintenance screen. Admin panel stays available. Default is OFF.",
+    defaultValue: false,
+  },
+  {
+    key: "driver_simulation_enabled",
+    label: "Testing simulation for driver",
+    description:
+      "Testing only. When ON, the rider app feed shows the simulation (play) button that moves the rider along the route automatically. Keep OFF on live. Default is OFF.",
     defaultValue: false,
   },
 ];

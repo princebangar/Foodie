@@ -29,6 +29,7 @@ import { FoodAddon } from '../../restaurant/models/foodAddon.model.js';
 import { FoodSupportTicket } from '../../user/models/supportTicket.model.js';
 import { FoodRestaurantSupportTicket } from '../../restaurant/models/supportTicket.model.js';
 import { FoodOrder } from '../../orders/models/order.model.js';
+import { FoodUserWallet } from '../../user/models/userWallet.model.js';
 import {
     toStartOfDayInTimeZone,
     toEndOfDayInTimeZone,
@@ -38,6 +39,8 @@ import {
     zonedWallTimeToUtc,
 } from '../../../../utils/timezone.js';
 import { FoodTransaction } from '../../orders/models/foodTransaction.model.js';
+import { initiateRazorpayRefund } from '../../orders/helpers/razorpay.helper.js';
+import * as userWalletService from '../../user/services/userWallet.service.js';
 import { FoodRestaurantWithdrawal } from '../../restaurant/models/foodRestaurantWithdrawal.model.js';
 import { FoodDeliveryWithdrawal } from '../../delivery/models/foodDeliveryWithdrawal.model.js';
 import { FoodDeliveryWallet } from '../../delivery/models/deliveryWallet.model.js';
@@ -648,10 +651,16 @@ export async function getDashboardStats(query = {}) {
                             $cond: [DELIVERED_ORDER_STATUS_EXPR, DASHBOARD_RIDER_EARNING_EXPR, 0]
                         }
                     },
-                    gstTotal: { 
-                        $sum: { 
-                            $cond: [DELIVERED_ORDER_STATUS_EXPR, { $ifNull: ['$pricing.tax', 0] }, 0] 
-                        } 
+                    gstTotal: {
+                        $sum: {
+                            $cond: [DELIVERED_ORDER_STATUS_EXPR, { $ifNull: ['$pricing.tax', 0] }, 0]
+                        }
+                    },
+                    // Coupon discounts are platform-funded: they come off the Platform Total.
+                    couponDiscountTotal: {
+                        $sum: {
+                            $cond: [DELIVERED_ORDER_STATUS_EXPR, { $ifNull: ['$pricing.discount', 0] }, 0]
+                        }
                     },
                     // COD pipeline: include pending/processing cash orders (not only delivered)
                     codCollectedTotal: {
@@ -933,11 +942,12 @@ export async function getDashboardStats(query = {}) {
     const deliveryFeeTotal = Number(totals.deliveryFeeTotal || 0);
     const riderEarningTotal = Number(totals.riderEarningTotal || 0);
     const gstTotal = Number(totals.gstTotal || 0);
+    const couponDiscountTotal = Number(totals.couponDiscountTotal || 0);
     // Delivery fee kept by platform after paying riders
     const deliveryProfit = Math.max(0, deliveryFeeTotal - riderEarningTotal);
-    // Platform Total = Comm + Platform fee + Admin markup + Delivery net + GST
+    // Platform Total = Comm + Platform fee + Admin markup + Delivery net + GST - coupon discounts (platform-funded)
     const totalAdminEarnings =
-        Math.round((commissionTotal + platformFeeTotal + markupTotal + deliveryProfit + gstTotal) * 100) / 100;
+        Math.round((commissionTotal + platformFeeTotal + markupTotal + deliveryProfit + gstTotal - couponDiscountTotal) * 100) / 100;
 
     return {
         orders: {
@@ -968,6 +978,7 @@ export async function getDashboardStats(query = {}) {
         deliveryBoyEarning: Number(totals.deliveryBoyEarningTotal || 0),
         restaurantEarning: Number(totals.restaurantEarningTotal || 0),
         gst: { total: gstTotal },
+        couponDiscount: { total: couponDiscountTotal },
         totalAdminEarnings,
         deliveryProfit,
         restaurants: {
@@ -1225,6 +1236,7 @@ export async function getTransactionReport(query = {}) {
     let adminMarkup = 0;
     let adminDeliveryNet = 0;
     let adminGst = 0;
+    let adminCouponDiscount = 0;
     let restaurantEarning = 0;
     let deliverymanEarning = 0;
     const markupByRestaurantMap = new Map();
@@ -1241,6 +1253,7 @@ export async function getTransactionReport(query = {}) {
         const baseSubtotal = toNum(pricing.baseSubtotal ?? pricing.subtotal);
         const markupTotal = toNum(pricing.markupTotal);
         const packaging = toNum(pricing.packagingFee);
+        const couponDiscount = toNum(pricing.discount);
         const os = String(order.orderStatus || '').toLowerCase();
         const pay = String(order?.payment?.status || '').toLowerCase();
         const deliveryNet = Math.max(0, deliveryFee - rider);
@@ -1249,8 +1262,9 @@ export async function getTransactionReport(query = {}) {
 
         if (os === 'delivered') {
             completedTransaction += orderTotal;
-            // Align with dashboard Platform Total components
-            adminEarning += commission + platformFee + markupTotal + deliveryNet + tax;
+            // Align with dashboard Platform Total components (coupon discount is platform-funded)
+            adminEarning += commission + platformFee + markupTotal + deliveryNet + tax - couponDiscount;
+            adminCouponDiscount += couponDiscount;
             adminCommission += commission;
             adminPlatformFee += platformFee;
             adminMarkup += markupTotal;
@@ -1300,6 +1314,7 @@ export async function getTransactionReport(query = {}) {
                 markup: Math.round(adminMarkup * 100) / 100,
                 deliveryNet: Math.round(adminDeliveryNet * 100) / 100,
                 gst: Math.round(adminGst * 100) / 100,
+                couponDiscount: Math.round(adminCouponDiscount * 100) / 100,
             },
             adminMarkupTotal: Math.round(adminMarkup * 100) / 100,
             markupByRestaurant: [...markupByRestaurantMap.values()]
@@ -1670,6 +1685,15 @@ export async function getTaxReportDetail(restaurantId, query = {}) {
 }
 
 // ----- Customers / Users (admin) -----
+// Counts only delivered orders whose payment was collected (cash or online) and not refunded.
+const SUCCESSFUL_ORDER_COND = {
+    $and: [
+        { $eq: ['$orderStatus', 'delivered'] },
+        { $ne: ['$payment.status', 'refunded'] },
+        { $not: [{ $in: [{ $ifNull: ['$payment.refund.status', 'none'] }, ['pending', 'processed']] }] }
+    ]
+};
+
 export async function getCustomers(query = {}) {
     const limit = Math.min(Math.max(parseInt(query.limit, 10) || 50, 1), 1000);
     const page = Math.max(parseInt(query.page, 10) || 1, 1);
@@ -1727,18 +1751,24 @@ export async function getCustomers(query = {}) {
     };
 
     const userIds = docs.map((u) => u._id).filter(Boolean);
-    const orderStats = userIds.length > 0
-        ? await FoodOrder.aggregate([
-            { $match: { userId: { $in: userIds } } },
-            {
-                $group: {
-                    _id: '$userId',
-                    totalOrder: { $sum: 1 },
-                    totalOrderAmount: { $sum: { $ifNull: ['$pricing.total', 0] } }
+    const [orderStats, wallets] = userIds.length > 0
+        ? await Promise.all([
+            FoodOrder.aggregate([
+                { $match: { userId: { $in: userIds } } },
+                {
+                    $group: {
+                        _id: '$userId',
+                        totalOrder: { $sum: 1 },
+                        totalOrderAmount: {
+                            $sum: { $cond: [SUCCESSFUL_ORDER_COND, { $ifNull: ['$pricing.total', 0] }, 0] }
+                        }
+                    }
                 }
-            }
+            ]),
+            FoodUserWallet.find({ userId: { $in: userIds } }).select('userId balance').lean()
         ])
-        : [];
+        : [[], []];
+    const walletMap = new Map(wallets.map((w) => [String(w.userId), Number(w.balance || 0)]));
 
     const orderStatsMap = new Map(
         orderStats.map((x) => [
@@ -1766,6 +1796,7 @@ export async function getCustomers(query = {}) {
         isCodBlocked: u.isCodBlocked === true,
         totalOrder: stats.totalOrder,
         totalOrderAmount: stats.totalOrderAmount,
+        walletBalance: walletMap.get(String(u._id)) || 0,
         joiningDate: u.createdAt,
         createdAt: u.createdAt
         });
@@ -1784,13 +1815,16 @@ export async function getCustomerById(id) {
     const u = await FoodUser.findById(id).select('-__v').lean();
     if (!u) return null;
     const customerObjectId = new mongoose.Types.ObjectId(id);
+    const walletPromise = FoodUserWallet.findOne({ userId: customerObjectId }).select('balance').lean();
     const orderStats = await FoodOrder.aggregate([
         { $match: { userId: customerObjectId } },
         {
             $group: {
                 _id: '$userId',
                 totalOrders: { $sum: 1 },
-                totalOrderAmount: { $sum: { $ifNull: ['$pricing.total', 0] } },
+                totalOrderAmount: {
+                    $sum: { $cond: [SUCCESSFUL_ORDER_COND, { $ifNull: ['$pricing.total', 0] }, 0] }
+                },
                 totalDeliveredOrders: {
                     $sum: { $cond: [{ $eq: ['$orderStatus', 'delivered'] }, 1, 0] }
                 },
@@ -1809,6 +1843,7 @@ export async function getCustomerById(id) {
         }
     ]);
     const stats = orderStats?.[0] || {};
+    const wallet = await walletPromise;
     const sanitizeUrl = (s) => {
         if (!s) return '';
         const str = String(s).trim();
@@ -1831,6 +1866,7 @@ export async function getCustomerById(id) {
         totalOrderAmount: Number(stats.totalOrderAmount || 0),
         totalDeliveredOrders: Number(stats.totalDeliveredOrders || 0),
         totalCancelledOrders: Number(stats.totalCancelledOrders || 0),
+        walletBalance: Number(wallet?.balance || 0),
         joiningDate: u.createdAt,
         createdAt: u.createdAt,
         updatedAt: u.updatedAt
@@ -2908,7 +2944,8 @@ function posDeliveredOrderMoneyBreakdown(order) {
     const rider = toNum(order?.riderEarning);
     const riderShare = order?.dispatch?.deliveryPartnerId ? rider : 0;
     const restaurantShare = Math.max(0, baseSubtotal + packagingFee - commission);
-    const platformNetProfit = Math.max(0, platformFee + deliveryFee + commission + markupTotal - riderShare);
+    // Coupon discount is platform-funded (restaurant share is not reduced).
+    const platformNetProfit = Math.max(0, platformFee + deliveryFee + commission + markupTotal - discount - riderShare);
 
     return {
         subtotal,
@@ -4569,7 +4606,7 @@ export async function createAdminOffer(body) {
             await notifyOwnersSafely(
                 [{ ownerType: 'RESTAURANT', ownerId: doc.restaurantId }],
                 {
-                    title: 'New Campaign Invitation! ðŸ“¢',
+                    title: 'New Campaign Invitation! 📢',
                     body: `You have been invited to join a new campaign: "${doc.couponCode}". Check it out now!`,
                     image: undefined,
                     data: {
@@ -5006,7 +5043,7 @@ export async function addDeliveryPartnerBonus(body, adminUser) {
         await notifyOwnerSafely(
             { ownerType: 'DELIVERY_PARTNER', ownerId: body.deliveryPartnerId },
             {
-                title: 'Bonus Credited! ðŸŽŠ',
+                title: 'Bonus Credited! 🎊',
                 body: `You have received a bonus of \u20B9${body.amount}. ${body.reference || 'Great job!'}`,
                 image: undefined,
                 data: {
@@ -5380,7 +5417,7 @@ export async function creditEarningAddonHistory(historyId, notes) {
         await notifyOwnerSafely(
             { ownerType: 'DELIVERY_PARTNER', ownerId: doc.deliveryPartnerId },
             {
-                title: 'Incentive Credited! ðŸŽ¯',
+                title: 'Incentive Credited! 🎯',
                 body: `Your incentive for "${doc.offerId?.title || 'Earning Addon'}" has been approved and moved to your pocket.`,
                 image: undefined,
                 data: {
@@ -5412,7 +5449,7 @@ export async function cancelEarningAddonHistory(historyId, reason) {
         await notifyOwnerSafely(
             { ownerType: 'DELIVERY_PARTNER', ownerId: doc.deliveryPartnerId },
             {
-                title: 'Incentive Update ðŸ“‹',
+                title: 'Incentive Update 📋',
                 body: `Your incentive request for "${doc.offerId?.title || 'Earning Addon'}" was not approved. Reason: ${doc.cancelReason || 'Ineligible'}`,
                 image: undefined,
                 data: {
@@ -6477,10 +6514,107 @@ export async function getSidebarBadges() {
 }
 
 /**
+ * Moves an already wallet-refunded Razorpay order's refund to the customer's bank:
+ * debits the same amount from the Foodie wallet, then refunds it on Razorpay. If the wallet
+ * balance is too low, or Razorpay fails, the wallet is left exactly as it was.
+ */
+async function moveWalletRefundToBank(order) {
+    if (String(order.payment?.method || '').toLowerCase() !== 'razorpay') {
+        throw new ValidationError('Bank refund is only possible for orders paid via Razorpay.');
+    }
+    const paymentId = order.payment?.razorpay?.paymentId;
+    if (!paymentId) throw new ValidationError('Razorpay payment id missing on this order');
+    const amount = Number(order.payment?.refund?.amount || 0);
+    if (!(amount > 0)) throw new ValidationError('Invalid refund amount');
+    const label = order.orderId || String(order._id);
+
+    // Atomic claim so two clicks can never move the same refund twice.
+    const claimed = await FoodOrder.findOneAndUpdate(
+        { _id: order._id, 'payment.refund.status': 'processed', 'payment.refund.destination': 'wallet' },
+        { $set: { 'payment.refund.status': 'pending' } },
+        { new: true },
+    );
+    if (!claimed) {
+        throw new ValidationError('A refund is already in progress for this order, or it was already moved to bank.');
+    }
+
+    let debited = false;
+    try {
+        await userWalletService.deductWalletBalance(
+            order.userId,
+            amount,
+            `Refund for order #${label} moved to bank`,
+            { orderId: order._id, source: 'refund_to_bank' },
+        );
+        debited = true;
+
+        const result = await initiateRazorpayRefund(paymentId, amount, 'Refund moved from wallet to bank by admin');
+        if (!result.success) throw new Error(result.error || 'Razorpay refund failed');
+
+        await FoodOrder.updateOne(
+            { _id: order._id },
+            {
+                $set: {
+                    'payment.status': 'refunded',
+                    'payment.refund': {
+                        status: 'processed',
+                        destination: 'source',
+                        amount,
+                        refundId: result.refundId || '',
+                        processedAt: new Date(),
+                    },
+                },
+            },
+        );
+        try {
+            await FoodTransaction.updateOne(
+                { orderId: order._id },
+                {
+                    $push: {
+                        history: {
+                            kind: 'refunded',
+                            amount,
+                            at: new Date(),
+                            note: `Moved wallet refund to bank ${result.refundId || ''}`.trim(),
+                            recordedBy: { role: 'ADMIN' },
+                        },
+                    },
+                },
+            );
+        } catch (err) {
+            logger.warn(`moveWalletRefundToBank ledger sync failed for ${label}: ${err?.message || err}`);
+        }
+        logger.info(`[Refund] Order ${label}: Rs ${amount} moved from wallet to bank ${result.refundId || ''}`);
+    } catch (err) {
+        if (debited) {
+            try {
+                await userWalletService.refundWalletBalance(
+                    order.userId,
+                    amount,
+                    `Reversal: bank refund for order #${label} failed`,
+                    { orderId: order._id, source: 'refund_to_bank_rollback' },
+                );
+            } catch (rollbackErr) {
+                logger.error(`[Refund] Wallet rollback FAILED for order ${label} (Rs ${amount}): ${rollbackErr?.message || rollbackErr}. MANUAL FIX REQUIRED.`);
+            }
+        }
+        await FoodOrder.updateOne({ _id: order._id }, { $set: { 'payment.refund.status': 'processed' } });
+        const message = err?.message || String(err);
+        throw new ValidationError(
+            message === 'Insufficient wallet balance'
+                ? `Customer ke wallet me Rs ${amount} balance nahi bacha (shayad kharch ho gaya). Bank refund nahi ho sakta.`
+                : message,
+        );
+    }
+
+    return (await FoodOrder.findById(order._id)) || order;
+}
+
+/**
  * Admin-triggered Razorpay refund for a paid online order.
  * Status correction + gateway refund — does not re-run cancel automations.
  */
-export async function processRefund(orderId, refundAmount) {
+export async function processRefund(orderId, refundAmount, destination = 'wallet') {
     if (!mongoose.Types.ObjectId.isValid(orderId)) {
         throw new ValidationError('Invalid order id');
     }
@@ -6500,6 +6634,11 @@ export async function processRefund(orderId, refundAmount) {
         throw new ValidationError('Order payment is not in a refundable paid state');
     }
     if (alreadyProcessed || status === 'refunded') {
+        // Refund already credited to the Foodie wallet, customer now wants it in the bank instead.
+        const refundedTo = String(order.payment?.refund?.destination || '').toLowerCase();
+        if (String(destination || '').toLowerCase() === 'source' && refundedTo === 'wallet') {
+            return moveWalletRefundToBank(order);
+        }
         return order;
     }
 
@@ -6512,12 +6651,19 @@ export async function processRefund(orderId, refundAmount) {
         throw new ValidationError('Invalid refund amount');
     }
 
+    const toBank = String(destination || '').toLowerCase() === 'source';
+    if (toBank && method !== 'razorpay') {
+        throw new ValidationError('Bank refund is only possible for orders paid via Razorpay. Use Foodie wallet instead.');
+    }
+
     // Shared, race-safe refund logic (Razorpay or wallet). Imported lazily to avoid a circular import.
     const { settleRefundOnCancel } = await import('../../orders/services/order.service.js');
     const result = await settleRefundOnCancel(order, {
         reason: 'Refund issued by admin',
         amount,
         allowQr: true,
+        destination: toBank ? 'source' : 'wallet',
+        adminChoice: true,
     });
 
     if (result.status === 'failed') {

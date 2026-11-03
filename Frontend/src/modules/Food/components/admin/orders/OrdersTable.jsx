@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react"
-import { Eye, Printer, ArrowUpDown, Loader2, Check, X, Trash2, ChevronDown, ChevronUp } from "lucide-react"
+import { Eye, Printer, ArrowUpDown, Loader2, Check, X, Trash2, ChevronDown, ChevronUp, Bike } from "lucide-react"
+import { isBogoFreeLine, bogoDishName, getBogoFreeUnitValue, orderHasBogo } from "@food/utils/bogo"
+import { BogoBadge, BogoFreePrice } from "@food/components/BogoOrderBits"
 import {
   resolveRestaurantItemUnitPrice,
   resolveItemMarkupUnit,
@@ -30,6 +32,11 @@ const getStatusColor = (orderStatus) => {
   return colors[orderStatus] || "bg-slate-100 text-slate-700"
 }
 
+/** Home-delivery orders the admin can hand to a rider (preparing / ready / on the way). */
+const ASSIGNABLE_DISPLAY_STATUSES = new Set(["Processing", "Ready for Pickup", "Food On The Way"])
+const canAssignRider = (order) =>
+  order?.orderType === "delivery" && ASSIGNABLE_DISPLAY_STATUSES.has(order?.orderStatus)
+
 const getPaymentStatusColor = (paymentStatus) => {
   if (paymentStatus === "Paid" || paymentStatus === "Collected") return "text-emerald-600"
   if (paymentStatus === "COD Pending" || paymentStatus === "Not Collected") return "text-amber-600"
@@ -47,6 +54,7 @@ export default function OrdersTable({
   onDeleteOrder,
   onAcceptOrder,
   onRejectOrder,
+  onAssignPartner,
   actionLoadingOrderId,
   actionLoadingType,
   deletingOrderId,
@@ -342,6 +350,7 @@ export default function OrdersTable({
                 {visibleColumns.orderId && (
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className="text-sm font-medium text-slate-900">{order.orderId}</span>
+                    {orderHasBogo(order) && <BogoBadge label="BOGO" className="ml-2 align-middle" />}
                   </td>
                 )}
                 {visibleColumns.orderDate && (
@@ -395,8 +404,9 @@ export default function OrdersTable({
                                   </span>
                                   <div className="flex-1">
                                     <span className="text-slate-800 font-medium">
-                                      {item.name || item.itemName || item.title || 'Unknown Item'}
+                                      {isBogoFreeLine(item) ? bogoDishName(item) : item.name || item.itemName || item.title || 'Unknown Item'}
                                     </span>
+                                    {isBogoFreeLine(item) && <BogoBadge className="ml-1.5 align-middle" />}
                                     {item.variantName && (
                                       <p className="text-xs text-slate-500 font-medium">{item.variantName}</p>
                                     )}
@@ -445,9 +455,13 @@ export default function OrdersTable({
                                     key={idx || item.itemId || `item-price-${idx}`}
                                     className="text-sm text-left min-h-[20px] flex items-center"
                                   >
-                                    <span className="font-medium text-slate-700">
-                                      {formatINR(baseLine)}
-                                    </span>
+                                    {isBogoFreeLine(item) ? (
+                                      <BogoFreePrice unitValue={getBogoFreeUnitValue(order.items, item)} quantity={qty} />
+                                    ) : (
+                                      <span className="font-medium text-slate-700">
+                                        {formatINR(baseLine)}
+                                      </span>
+                                    )}
                                   </div>
                                 )
                               })}
@@ -467,6 +481,7 @@ export default function OrdersTable({
                   <td className="px-6 py-4 whitespace-nowrap text-left">
                     <span className="text-sm font-medium text-slate-700">
                       {(() => {
+                        if (order.orderType === "takeaway") return "Takeaway"
                         const deliveryCharge = Number(order.deliveryCharge ?? 0)
                         return `₹${deliveryCharge.toLocaleString(undefined, {
                           minimumFractionDigits: 2,
@@ -643,7 +658,8 @@ export default function OrdersTable({
                       </div>
 
                       {/* Divider if we have primary actions */}
-                      {( (order.orderStatus === "Pending" && (onAcceptOrder || onRejectOrder)) || 
+                      {( (order.orderStatus === "Pending" && (onAcceptOrder || onRejectOrder)) ||
+                         (onAssignPartner && canAssignRider(order)) ||
                          ( (() => {
                            const isCancelled = order.orderStatus === "Cancelled by Restaurant" || 
                                              order.orderStatus === "Cancelled" || 
@@ -707,12 +723,26 @@ export default function OrdersTable({
                           )
                         })()}
 
+                        {onAssignPartner && canAssignRider(order) && (() => {
+                          const hasRider = order.dispatch?.status === "accepted"
+                          return (
+                            <button
+                              onClick={() => onAssignPartner(order)}
+                              className={`px-2.5 py-1.5 rounded text-xs font-semibold text-white transition-colors shadow-sm active:scale-95 flex items-center gap-1 ${
+                                hasRider ? "bg-slate-700 hover:bg-slate-800" : "bg-orange-600 hover:bg-orange-700"
+                              }`}
+                              title={hasRider ? "Reassign to another delivery partner" : "Assign a delivery partner manually"}
+                            >
+                              <Bike className="w-3.5 h-3.5" />
+                              <span>{hasRider ? "Reassign" : "Assign"}</span>
+                            </button>
+                          )
+                        })()}
+
                         {/* Refund Block */}
                         {(() => {
-                          const isCancelled = order.orderStatus === "Cancelled by Restaurant" || 
-                                            order.orderStatus === "Cancelled" || 
-                                            order.orderStatus === "Cancelled by User" ||
-                                            (order.status === "cancelled" && (order.cancelledBy === "user" || order.cancelledBy === "restaurant"));
+                          const isCancelled = /cancel/i.test(String(order.orderStatus || "")) ||
+                                            order.status === "cancelled";
                           const paymentMethod = order.payment?.method || order.paymentMethod;
                           const isOnlinePayment = order.paymentType === "Online" ||
                                                 (order.paymentType !== "Cash on Delivery" && 
@@ -724,18 +754,24 @@ export default function OrdersTable({
                                                   order.payment?.method === "razorpay" ||
                                                   order.payment?.method === "online"));
                           const isWalletPayment = order.paymentType === "Wallet" || paymentMethod === "wallet";
-                          return isCancelled && (isOnlinePayment || isWalletPayment) && order.paymentStatus === "Paid";
+                          const isRefunded = order.paymentStatus === "Refunded" &&
+                                             (order.refundStatus === "processed" || order.refundStatus === "initiated");
+                          return isCancelled && (isOnlinePayment || isWalletPayment) &&
+                                 (order.paymentStatus === "Paid" || isRefunded);
                         })() && (
                           <>
+                            {/* Moving a wallet refund to bank lives in the View Order dialog (Admin Controls) */}
                             {order.refundStatus === 'processed' || order.refundStatus === 'initiated' ? (
                               <span className={`px-2.5 py-1.5 rounded-md text-xs font-semibold ${
-                                order.paymentType === "Wallet" || order.payment?.method === "wallet"
+                                order.paymentType === "Wallet" || order.payment?.method === "wallet" || order.refundDestination === "wallet"
                                   ? "bg-purple-100 text-purple-700"
                                   : "bg-emerald-100 text-emerald-700"
                               }`}>
-                                {order.paymentType === "Wallet" || order.payment?.method === "wallet" 
-                                  ? "Wallet Refunded" 
-                                  : "Refunded"}
+                                {order.paymentType === "Wallet" || order.payment?.method === "wallet"
+                                  ? "Wallet Refunded"
+                                  : order.refundDestination === "wallet"
+                                    ? "Refunded to Wallet"
+                                    : "Refunded"}
                               </span>
                             ) : onRefund ? (
                               <button 

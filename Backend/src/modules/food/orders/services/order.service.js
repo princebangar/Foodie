@@ -671,6 +671,7 @@ export async function createOrder(userId, dto, options = {}) {
     deliveryFee: orderType === "takeaway" ? 0 : Number(priced.pricing?.deliveryFee ?? 0),
     platformFee: Number(priced.pricing?.platformFee ?? 0),
     discount: Number(priced.pricing?.discount ?? 0),
+    bogoSavings: Number(priced.pricing?.bogoSavings ?? 0),
     total: Number(priced.pricing?.total ?? 0),
     currency: String(priced.pricing?.currency || "INR"),
     couponCode: priced.pricing?.couponCode || null,
@@ -762,6 +763,7 @@ export async function createOrder(userId, dto, options = {}) {
   };
 
   let distanceKm = null;
+  let distanceMode = null;
   let riderEarning = 0;
 
   // For Razorpay (online) orders, run geocoding non-blocking so the Razorpay
@@ -793,13 +795,18 @@ export async function createOrder(userId, dto, options = {}) {
             const updateFields = {};
             if (earningResolved.distanceKm != null) {
               updateFields['distanceKm'] = earningResolved.distanceKm;
+              updateFields['distanceMode'] = earningResolved.distanceMode || null;
               updateFields['riderEarning'] = earningResolved.riderEarning ?? 0;
-              updateFields['pricing.platformProfit'] = Math.max(
+              // Top-level field (the schema has no pricing.platformProfit, so writing there was dropped
+              // and online orders kept a profit that never had the rider earning taken off).
+              // Coupon discount is platform-funded (restaurant share is not reduced), so it comes off too.
+              updateFields['platformProfit'] = Math.max(
                 0,
                 (normalizedPricing.deliveryFee ?? 0) +
                   (normalizedPricing.platformFee ?? 0) +
                   (normalizedPricing.markupTotal ?? 0) +
                   (normalizedPricing.restaurantCommission ?? 0) -
+                  (normalizedPricing.discount ?? 0) -
                   (earningResolved.riderEarning ?? 0),
               );
             }
@@ -810,34 +817,18 @@ export async function createOrder(userId, dto, options = {}) {
               await FoodOrder.updateOne({ _id: order._id }, { $set: updateFields });
             }
             // The ledger row was created before the rider earning was known (it was 0 then).
-            // Keep riderShare / platformNetProfit in sync with the order.
+            // Keep riderShare / platformNetProfit in sync with the order. Use the order's value:
+            // the ledger's pricing snapshot has no markupTotal, so recomputing from it drops the markup.
             if (earningResolved.distanceKm != null) {
-              const rider = Number(earningResolved.riderEarning ?? 0);
-              await FoodTransaction.updateOne({ orderId: order._id }, [
+              await FoodTransaction.updateOne(
+                { orderId: order._id },
                 {
                   $set: {
-                    'amounts.riderShare': rider,
-                    'amounts.platformNetProfit': {
-                      $max: [
-                        0,
-                        {
-                          $subtract: [
-                            {
-                              $add: [
-                                { $ifNull: ['$pricing.platformFee', 0] },
-                                { $ifNull: ['$pricing.deliveryFee', 0] },
-                                { $ifNull: ['$pricing.restaurantCommission', 0] },
-                                { $ifNull: ['$pricing.markupTotal', 0] },
-                              ],
-                            },
-                            rider,
-                          ],
-                        },
-                      ],
-                    },
+                    'amounts.riderShare': Number(earningResolved.riderEarning ?? 0),
+                    'amounts.platformNetProfit': updateFields.platformProfit,
                   },
                 },
-              ]);
+              );
             }
             // Backfill restaurant coords when missing
             if (earningResolved.restaurantGeocoded && earningResolved.restaurantPoint) {
@@ -879,6 +870,7 @@ export async function createOrder(userId, dto, options = {}) {
         zoneId: restaurant?.zoneId || dto.zoneId || null,
       });
       distanceKm = earningResolved.distanceKm;
+      distanceMode = earningResolved.distanceMode || null;
       riderEarning = earningResolved.riderEarning;
 
       // Persist geocoded delivery coords so later map/dispatch don't miss them again
@@ -934,12 +926,15 @@ export async function createOrder(userId, dto, options = {}) {
 
   normalizedPricing.restaurantCommission = restaurantCommission || 0;
 
+  // Coupon discount is platform-funded (the restaurant share is not reduced), so it comes off the
+  // platform's profit, the same as in the ledger (foodTransaction.service createInitialTransaction).
   const platformProfit = Math.max(
     0,
     (Number.isFinite(normalizedPricing.deliveryFee) ? normalizedPricing.deliveryFee : 0) +
       (Number.isFinite(normalizedPricing.platformFee) ? normalizedPricing.platformFee : 0) +
       (Number.isFinite(normalizedPricing.markupTotal) ? normalizedPricing.markupTotal : 0) +
       restaurantCommission -
+      (Number.isFinite(normalizedPricing.discount) ? normalizedPricing.discount : 0) -
       riderEarning,
   );
 
@@ -990,6 +985,8 @@ export async function createOrder(userId, dto, options = {}) {
     scheduledAt: dto.scheduledAt ? new Date(dto.scheduledAt) : null,
     riderEarning,
     platformProfit,
+    distanceKm,
+    distanceMode,
   });
 
   let razorpayPayload = null;
@@ -1178,7 +1175,7 @@ export async function verifyPayment(userId, dto) {
   // Notify Customer about payment success
   await notifyOwnersSafely([{ ownerType: "USER", ownerId: userId }], {
     title: "Payment Successful",
-    body: `We have received your payment of ₹${order.payment.amountDue} for Order #${order._id.toString()}.`,
+    body: `We have received your payment of ₹${order.payment.amountDue} for Order #${order.order_id || order._id.toString()}.`,
     data: {
       type: "payment_success",
       orderId: String(order._id.toString()),
@@ -1489,7 +1486,7 @@ export async function resyncState(userId, role) {
  */
 export async function settleRefundOnCancel(
   order,
-  { reason = "Order cancelled", amount: amountOverride, allowQr = false, destination: destinationOverride } = {},
+  { reason = "Order cancelled", amount: amountOverride, allowQr = false, destination: destinationOverride, adminChoice = false } = {},
 ) {
   const method = String(order?.payment?.method || "").toLowerCase();
   const payStatus = String(order?.payment?.status || "").toLowerCase();
@@ -1513,10 +1510,10 @@ export async function settleRefundOnCancel(
   );
   if (!claimed) return { status: "skipped" };
 
-  // Default: wallet-paid -> wallet, gateway-paid -> original payment method. A customer may also
-  // choose "refund to wallet" for a gateway-paid order (destinationOverride === "wallet").
-  const destination =
-    method === "wallet" || destinationOverride === "wallet" ? "wallet" : "source";
+  // Business rule: every cancel/refund is credited to the customer's Foodie wallet (never back to
+  // the bank/card). The only exception is an explicit admin choice ("source" = original payment
+  // method via Razorpay) from the admin Refund button; destinationOverride is ignored otherwise.
+  const destination = adminChoice && destinationOverride === "source" ? "source" : "wallet";
   try {
     let refundId = "";
     if (destination === "wallet") {
@@ -1588,7 +1585,7 @@ export async function retryFailedRefunds() {
   return { checked: orders.length, refunded };
 }
 
-export async function cancelOrder(orderId, userId, reason, refundDestination = "source") {
+export async function cancelOrder(orderId, userId, reason, refundDestination = "wallet") {
   const identity = buildOrderIdentityFilter(orderId);
   if (!identity) throw new ValidationError("Order id required");
 
@@ -1690,14 +1687,8 @@ export async function cancelOrder(orderId, userId, reason, refundDestination = "
   const isOnlinePaid =
     finalPaymentMethod === "razorpay" &&
     (finalPaymentStatus === "paid" || finalPaymentStatus === "refunded");
-  const settledRefundDestination =
-    String(order.payment?.refund?.destination || normalizedRefundDestination || "source").toLowerCase() === "wallet"
-      ? "wallet"
-      : "source";
   const refundDetail = isOnlinePaid
-    ? settledRefundDestination === "wallet"
-      ? ` Your refund of ₹${order.pricing.total} has been credited to your wallet.`
-      : ` Your refund of ₹${order.pricing.total} is being processed and will be credited to your original payment method within 5-7 working days.`
+    ? ` Your refund of ₹${order.pricing.total} has been credited to your Foodie wallet.`
     : "";
   
   await notifyOwnersSafely(
@@ -1947,7 +1938,7 @@ export async function updateOrderStatusRestaurant(
     }
   } else if (String(orderStatus).includes("cancel")) {
     const isOnlinePaid = order.payment.method === "razorpay" && (order.payment.status === "paid" || order.payment.status === "refunded");
-    const refundDetail = isOnlinePaid ? ` Your refund of ₹${order.pricing.total} is being processed and will be credited to your original payment method within 5-7 working days.` : "";
+    const refundDetail = isOnlinePaid ? ` Your refund of ₹${order.pricing.total} has been credited to your Foodie wallet.` : "";
     
     title = "Order Cancelled";
     body = `Unfortunately, your order has been cancelled by the restaurant.${refundDetail}`;
@@ -2620,34 +2611,13 @@ export async function listOrdersAdmin(query) {
   };
 }
 
-export async function assignDeliveryPartnerAdmin(
-  orderId,
-  deliveryPartnerId,
-  adminId,
-) {
-  const order = await FoodOrder.findById(orderId);
-  if (!order) throw new NotFoundError("Order not found");
-  if (order.dispatch.status === "accepted")
-    throw new ValidationError("Order already accepted by partner");
+/** Admin manual assign / reassign of a rider (see order-delivery.service). */
+export async function assignDeliveryPartnerAdmin(orderId, deliveryPartnerId, adminId) {
+  return deliveryService.assignOrderToPartnerAdmin(orderId, deliveryPartnerId, adminId);
+}
 
-  const partner = await FoodDeliveryPartner.findById(deliveryPartnerId)
-    .select("status")
-    .lean();
-  if (!partner || partner.status !== "approved")
-    throw new ValidationError("Delivery partner not available");
-
-    order.dispatch.status = 'assigned';
-    order.dispatch.deliveryPartnerId = new mongoose.Types.ObjectId(deliveryPartnerId);
-    order.dispatch.assignedAt = new Date();
-    pushStatusHistory(order, { byRole: 'ADMIN', byId: adminId, from: order.dispatch.status, to: 'assigned' });
-    await order.save();
-    enqueueOrderEvent('delivery_partner_assigned', {
-        orderMongoId: order._id?.toString?.(),
-        orderId: order._id.toString(),
-        deliveryPartnerId,
-        adminId
-    });
-    return normalizeOrderForClient(order);
+export async function listAssignablePartnersAdmin(orderId) {
+  return deliveryService.listAssignablePartnersAdmin(orderId);
 }
 
 export async function deleteOrderAdmin(orderId, adminId) {
@@ -3182,8 +3152,40 @@ export async function updateOrderStatusesAdmin(orderId, adminId, { orderStatus, 
       if (order.userId) {
         io.to(rooms.user(order.userId)).emit("order_status_update", payload);
       }
+      // The assigned rider was never told, so a rider kept driving to an order the admin cancelled.
+      if (order.dispatch?.deliveryPartnerId) {
+        const isCancelled = String(order.orderStatus || "").startsWith("cancelled");
+        io.to(rooms.delivery(order.dispatch.deliveryPartnerId)).emit("order_status_update", {
+          ...payload,
+          ...(isCancelled ? { status: "cancelled" } : {}),
+        });
+      }
     }
   } catch (_) {}
+
+  const assignedRiderId = order.dispatch?.deliveryPartnerId;
+  if (
+    assignedRiderId &&
+    nextOrderStatus &&
+    nextOrderStatus !== fromOrder &&
+    String(nextOrderStatus).startsWith("cancelled")
+  ) {
+    const displayOrderId = order.order_id || order.orderId || order._id.toString();
+    await notifyOwnerSafely(
+      { ownerType: "DELIVERY_PARTNER", ownerId: assignedRiderId },
+      {
+        title: "Order Cancelled ❌",
+        body: `Order #${displayOrderId} has been cancelled. Please stop your current task.`,
+        data: {
+          type: "order_status_update",
+          orderId: displayOrderId,
+          orderMongoId: order._id.toString(),
+          orderStatus: String(order.orderStatus || ""),
+          link: "/food/delivery",
+        },
+      },
+    );
+  }
 
   return normalizeOrderForClient(order);
 }

@@ -1,4 +1,5 @@
 import { FoodRestaurant } from '../../restaurant/models/restaurant.model.js';
+import { FoodTransaction } from '../models/foodTransaction.model.js';
 import { logger } from '../../../../utils/logger.js';
 import {
   resolveOrderDistanceKm,
@@ -58,19 +59,22 @@ export async function getRiderEarning(distanceKm, zoneId) {
   const baseRule = sorted.find((r) => Number(r.minDistance || 0) === 0) || null;
   if (!baseRule) return 0;
 
+  // Base payout + the flat amount of the ONE slab the distance falls in (e.g. 8.5 km → base ₹28 +
+  // 8-9 km slab ₹48 = ₹76). Lower slabs are not added up, and the amount is not multiplied by km.
+  // Beyond the last slab, the last slab's amount applies.
   let earning = Number(baseRule.basePayout || 0);
-
-  for (const r of sorted) {
-    const perKm = Number(r.commissionPerKm || 0);
-    if (!Number.isFinite(perKm) || perKm <= 0) continue;
+  const inSlab = (r) => {
     const min = Number(r.minDistance || 0);
     const max = r.maxDistance == null ? null : Number(r.maxDistance);
-    if (d <= min) continue;
-    const upper = max == null ? d : Math.min(d, max);
-    const kmInSlab = Math.max(0, upper - min);
-    if (kmInSlab > 0) {
-      earning += kmInSlab * perKm;
-    }
+    return (min === 0 ? d >= 0 : d > min) && (max == null || d <= max);
+  };
+  const slab =
+    sorted.find(inSlab) ||
+    [...sorted].reverse().find((r) => d > Number(r.minDistance || 0)) ||
+    null;
+  const slabAmount = Number(slab?.commissionPerKm || 0);
+  if (Number.isFinite(slabAmount) && slabAmount > 0) {
+    earning += slabAmount;
   }
 
   if (!Number.isFinite(earning) || earning <= 0) return 0;
@@ -123,7 +127,9 @@ export async function resolveRiderEarningForDelivery({
   return {
     riderEarning,
     distanceKm: resolved.distanceKm,
-    distanceMode: resolved.distanceMode || null,
+    // 'driving' | 'air_fallback' from the distance lookup; 'base_fallback' when no distance was
+    // found and the base payout was used.
+    distanceMode: resolved.distanceMode || (riderEarning > 0 ? 'base_fallback' : null),
     deliveryPoint: resolved.deliveryPoint,
     restaurantPoint: resolved.restaurantPoint,
     restaurantGeocoded: resolved.restaurantGeocoded,
@@ -167,6 +173,8 @@ export async function ensureRiderEarningOnOrder(order) {
 
   order.riderEarning = earningResolved.riderEarning;
   order.markModified?.('riderEarning');
+  order.distanceKm = earningResolved.distanceKm ?? null;
+  order.distanceMode = earningResolved.distanceMode || null;
 
   if (earningResolved.deliveryGeocoded && earningResolved.deliveryPoint) {
     const geo = toGeoJsonPoint(earningResolved.deliveryPoint);
@@ -179,16 +187,35 @@ export async function ensureRiderEarningOnOrder(order) {
     }
   }
 
-  // Keep platformProfit roughly consistent if pricing exists
+  // Keep platformProfit consistent with order creation and the ledger
+  // (fees + markup + commission - platform-funded coupon discount - rider)
   const deliveryFee = Number(order.pricing?.deliveryFee || 0);
   const platformFee = Number(order.pricing?.platformFee || 0);
+  const markupTotal = Number(order.pricing?.markupTotal || 0);
   const restaurantCommission = Number(order.pricing?.restaurantCommission || 0);
+  const couponDiscount = Math.max(0, Number(order.pricing?.discount || 0) || 0);
   if (Number.isFinite(deliveryFee) || Number.isFinite(platformFee)) {
     order.platformProfit = Math.max(
       0,
-      deliveryFee + platformFee + restaurantCommission - earningResolved.riderEarning,
+      deliveryFee + platformFee + markupTotal + restaurantCommission - couponDiscount - earningResolved.riderEarning,
     );
     order.markModified?.('platformProfit');
+
+    // The ledger row was created when the rider earning was still 0. Keep its rider share and
+    // platform net in step with the order (otherwise the ledger keeps the rider-less profit).
+    try {
+      await FoodTransaction.updateOne(
+        { orderId: order._id },
+        {
+          $set: {
+            'amounts.riderShare': Number(earningResolved.riderEarning || 0),
+            'amounts.platformNetProfit': order.platformProfit,
+          },
+        },
+      );
+    } catch (err) {
+      logger.warn(`Ledger sync after rider earning backfill failed for ${order._id}: ${err?.message || err}`);
+    }
   }
 
   logger.info(

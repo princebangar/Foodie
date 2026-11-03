@@ -18,6 +18,8 @@ import { alpha, colors, restaurantTheme, shadow, sp } from '@/theme';
 import useRestaurantBackNavigation from '@food/hooks/useRestaurantBackNavigation';
 import { restaurantAPI } from '@food/api';
 import { useRestaurantNotifications } from '@food/hooks/useRestaurantNotifications';
+import { isBogoFreeLine, bogoDishName, getBogoFreeUnitValue, orderHasBogo } from '@food/utils/bogo';
+import { BogoBadge, BogoFreePrice } from '@food/components/BogoOrderBits';
 
 const debugError = () => {};
 
@@ -328,6 +330,7 @@ function OrderCard({ order, index, onPress, onCopy, getStatusStyle }) {
         {/* Order ID */}
         <View style={[styles.rowGap2, { marginBottom: sp(2) }]}>
           <Text style={styles.idText}>ID: {order.id}</Text>
+          {orderHasBogo(order) ? <BogoBadge label="BOGO" /> : null}
           <Pressable onPress={onCopy} accessibilityLabel="Copy order ID" hitSlop={6} style={({ pressed }) => [styles.copyBtn, pressed && { backgroundColor: colors.gray[100] }]}>
             <Copy size={16} color={colors.gray[500]} />
           </Pressable>
@@ -349,9 +352,14 @@ function OrderCard({ order, index, onPress, onCopy, getStatusStyle }) {
           {order.items.slice(0, 2).map((item, idx) => (
             <View key={idx} style={styles.rowBetween}>
               <Text style={[styles.sm, { color: colors.gray[900], flex: 1 }]}>
-                {item.quantity} x {item.name}
+                {item.quantity} x {isBogoFreeLine(item) ? bogoDishName(item) : item.name}
               </Text>
-              <Text style={[styles.sm, { color: colors.gray[500] }]}>{formatMoney(item.price)}</Text>
+              {isBogoFreeLine(item) ? <BogoBadge style={{ marginHorizontal: sp(1.5), alignSelf: 'center' }} /> : null}
+              {isBogoFreeLine(item) ? (
+                <BogoFreePrice unitValue={getBogoFreeUnitValue(order.items, item)} />
+              ) : (
+                <Text style={[styles.sm, { color: colors.gray[500] }]}>{formatMoney(item.price)}</Text>
+              )}
             </View>
           ))}
           {order.items.length > 2 ? <Text style={styles.moreItems}>+{order.items.length - 2} more items</Text> : null}
@@ -451,6 +459,9 @@ export default function AllOrdersPage() {
 
       // Format items
       const items = (order.items || []).map((item) => ({
+        itemId: item.itemId || '',
+        variantId: item.variantId || '',
+        isBogoFree: item.isBogoFree === true,
         name: item.name || 'Item',
         quantity: item.quantity || 1,
         price: item.price || 0,

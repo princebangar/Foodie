@@ -5,6 +5,8 @@ import { restaurantAPI } from "@food/api"
 import { useRestaurantNotifications } from "@food/hooks/useRestaurantNotifications"
 import { inr2, normalizeOrder } from "./desktopData"
 import { PrepStepper, btn } from "./ui"
+import { isBogoFreeLine, bogoDishName } from "@food/utils/bogo"
+import { BogoBadge } from "@food/components/BogoOrderBits"
 
 const actionId = (o) => String(o?.orderMongoId || o?._id || o?.orderId || o?.order_id || o?.id || "").trim()
 
@@ -117,8 +119,9 @@ export default function NewOrderModal({ order, onDone }) {
             {n.items.map((it, i) => (
               <li key={i} className="flex justify-between gap-3 px-3 py-2 text-sm">
                 <span className="text-slate-800">
-                  <b className="text-slate-900">{it.quantity || 1}×</b> {it.name}
+                  <b className="text-slate-900">{it.quantity || 1}×</b> {isBogoFreeLine(it) ? bogoDishName(it) : it.name}
                   {it.variantName ? <span className="text-slate-500"> ({it.variantName})</span> : null}
+                  {isBogoFreeLine(it) && <BogoBadge className="ml-1.5 align-middle" />}
                 </span>
               </li>
             ))}

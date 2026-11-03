@@ -8,13 +8,39 @@ import {
   useRef,
   useState,
 } from "react"
+import { toast } from "sonner"
 import { foodCartAPI } from "@food/api"
+import { useProfile } from "@food/context/ProfileContext"
 import { buildCartLineId } from "@food/utils/foodVariants"
 
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
 
 const GUEST_CART_KEY = "cart"
+// The server keeps a single cart per user, so remember which tab (delivery/takeaway)
+// it was started from. Pricing differs per mode, so the cart is only shown in that tab.
+const CART_MODE_KEY = "food_cart_mode"
+
+const toCartMode = (orderType) => (orderType === "takeaway" ? "takeaway" : "delivery")
+const cartModeLabel = (mode) => (mode === "takeaway" ? "Takeaway" : "Delivery")
+
+const readCartMode = () => {
+  try {
+    const saved = localStorage.getItem(CART_MODE_KEY)
+    return saved === "takeaway" || saved === "delivery" ? saved : null
+  } catch {
+    return null
+  }
+}
+
+const writeCartMode = (mode) => {
+  try {
+    if (mode) localStorage.setItem(CART_MODE_KEY, mode)
+    else localStorage.removeItem(CART_MODE_KEY)
+  } catch {
+    // ignore
+  }
+}
 
 const defaultCartContext = {
   _isProvider: false,
@@ -288,6 +314,17 @@ const resolveCartEntryId = (items, itemId, variantId = "") => {
   return preferredId
 }
 
+const cartLineKey = (item) => {
+  const baseId = item?.itemId || item?.productId || item?.foodId
+  if (!baseId) {
+    const composite = parseCompositeLineId(item?.id)
+    if (composite) return `${composite.itemId}::${composite.variantId}`
+  }
+  return `${String(baseId || item?.id || "")}::${normalizeVariantKey(item?.variantId)}`
+}
+
+const SYNC_DEBOUNCE_MS = 250
+
 const apiErrorMessage = (err, fallback = "Cart update failed") =>
   err?.response?.data?.message || err?.message || fallback
 
@@ -299,16 +336,47 @@ export function CartProvider({ children }) {
   const [cartReady, setCartReady] = useState(false)
   const [lastAddEvent, setLastAddEvent] = useState(null)
   const [lastRemoveEvent, setLastRemoveEvent] = useState(null)
+  const [cartMode, setCartModeState] = useState(readCartMode)
+  const { orderType } = useProfile()
+  const currentMode = toCartMode(orderType)
+
+  const setCartMode = useCallback((mode) => {
+    writeCartMode(mode)
+    setCartModeState(mode)
+  }, [])
 
   const authRef = useRef(isUserAuthenticated())
   const loadSeqRef = useRef(0)
   const mutationSeqRef = useRef(0)
-  const inflightQtyRef = useRef(new Map())
   const loadedOnceRef = useRef(false)
 
+  // Optimistic cart: quantities the user picked that the server hasn't confirmed yet,
+  // keyed by item+variant (stable across the temp line id and the server's line id).
+  const pendingQtyRef = useRef(new Map())
+  const addInflightRef = useRef(new Set())
+  const syncTimersRef = useRef(new Map())
+
   const applyServerCart = useCallback((payload) => {
-    const next = normalizeCartData(payload?.items || [])
-    setCart(next)
+    let next = normalizeCartData(payload?.items || [])
+    // Keep unconfirmed quantities on screen so a server reply never makes the stepper jump back.
+    if (pendingQtyRef.current.size > 0) {
+      next = next
+        .map((line) => {
+          const pending = pendingQtyRef.current.get(cartLineKey(line))
+          return pending ? { ...line, quantity: pending.qty } : line
+        })
+        .filter((line) => line.quantity > 0)
+    }
+    const serverLines = next
+    setCart((prev) => {
+      if (addInflightRef.current.size === 0) return serverLines
+      // A just-added line whose add request is still in flight stays visible.
+      const serverKeys = new Set(serverLines.map(cartLineKey))
+      const inflight = normalizeCartData(prev).filter(
+        (line) => addInflightRef.current.has(cartLineKey(line)) && !serverKeys.has(cartLineKey(line)),
+      )
+      return inflight.length ? [...serverLines, ...inflight] : serverLines
+    })
     setCouponCode(payload?.couponCode || "")
     setRestaurantId(payload?.restaurantId || null)
     setRestaurantName(payload?.restaurantName || "")
@@ -337,6 +405,45 @@ export function CartProvider({ children }) {
     }
   }, [applyServerCart])
 
+  // Push the latest picked quantity of one line to the server. Rapid +/- taps are debounced
+  // into a single request; the screen already shows the new quantity.
+  const flushLine = useCallback(async (key) => {
+    syncTimersRef.current.delete(key)
+    if (addInflightRef.current.has(key)) return // the add's reply flushes it
+    const entry = pendingQtyRef.current.get(key)
+    if (!entry) return
+    if (!entry.lineId) {
+      pendingQtyRef.current.delete(key)
+      return
+    }
+    const seq = ++mutationSeqRef.current
+    try {
+      const response =
+        entry.qty > 0
+          ? await foodCartAPI.updateItem(entry.lineId, { quantity: entry.qty })
+          : await foodCartAPI.removeItem(entry.lineId)
+      if (pendingQtyRef.current.get(key) === entry) pendingQtyRef.current.delete(key)
+      if (seq === mutationSeqRef.current) applyServerCart(extractCartPayload(response))
+    } catch (err) {
+      debugError("cart sync failed", err)
+      if (pendingQtyRef.current.get(key) === entry) pendingQtyRef.current.delete(key)
+      loadDbCart()
+    }
+  }, [applyServerCart, loadDbCart])
+
+  const scheduleFlush = useCallback((key) => {
+    const timers = syncTimersRef.current
+    if (timers.has(key)) clearTimeout(timers.get(key))
+    timers.set(key, setTimeout(() => flushLine(key), SYNC_DEBOUNCE_MS))
+  }, [flushLine])
+
+  const resetPendingSync = () => {
+    syncTimersRef.current.forEach((timer) => clearTimeout(timer))
+    syncTimersRef.current.clear()
+    pendingQtyRef.current.clear()
+    addInflightRef.current.clear()
+  }
+
   // Initialize once: DB cart for auth users, guest LS otherwise (never persist auth cart to LS).
   useEffect(() => {
     const authed = isUserAuthenticated()
@@ -362,6 +469,7 @@ export function CartProvider({ children }) {
         clearGuestCartStorage()
         loadDbCart()
       } else if (!nextAuthed && wasAuthed) {
+        resetPendingSync()
         setCart([])
         setCouponCode("")
         setRestaurantId(null)
@@ -389,6 +497,24 @@ export function CartProvider({ children }) {
   }, [cart, cartReady])
 
   const normalizedCart = useMemo(() => normalizeCartData(cart), [cart])
+
+  // Empty cart frees the mode; a cart with no recorded mode (older build / other device)
+  // is adopted by the tab the user is currently on.
+  useEffect(() => {
+    if (!cartReady) return
+    if (normalizedCart.length === 0) {
+      if (cartMode) setCartMode(null)
+    } else if (!cartMode) {
+      setCartMode(currentMode)
+    }
+  }, [cartReady, normalizedCart.length, cartMode, currentMode, setCartMode])
+
+  const isCartModeMismatch = Boolean(cartMode) && cartMode !== currentMode
+  // What the current tab sees: the cart of the other mode stays hidden.
+  const visibleCart = useMemo(
+    () => (isCartModeMismatch ? [] : normalizedCart),
+    [isCartModeMismatch, normalizedCart],
+  )
 
   const triggerAddAnimation = (item, sourcePosition) => {
     if (!sourcePosition) return
@@ -420,9 +546,53 @@ export function CartProvider({ children }) {
     setTimeout(() => setLastRemoveEvent(null), 1500)
   }
 
+  const clearCart = useCallback(async () => {
+    resetPendingSync()
+    if (!isUserAuthenticated()) {
+      setCart([])
+      clearGuestCartStorage()
+      return { ok: true }
+    }
+    const seq = ++mutationSeqRef.current
+    try {
+      const response = await foodCartAPI.clearCart()
+      if (seq !== mutationSeqRef.current) return { ok: true }
+      applyServerCart(extractCartPayload(response))
+      return { ok: true }
+    } catch (err) {
+      debugError("clearCart failed", err)
+      return { ok: false, error: apiErrorMessage(err) }
+    }
+  }, [applyServerCart])
+
   const addToCart = useCallback(
     async (item, sourcePosition = null) => {
       if (!item) return { ok: false, error: "Invalid item" }
+
+      if (normalizedCart.length > 0 && isCartModeMismatch) {
+        const error = `Your ${cartModeLabel(cartMode)} cart already has items. Clear it to start a ${cartModeLabel(currentMode)} order.`
+        toast.error(error, {
+          id: "cart-mode-mismatch",
+          action: {
+            label: "Clear cart",
+            onClick: () => clearCart(),
+          },
+          actionButtonStyle: {
+            background: "linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)",
+            color: "#ffffff",
+            fontWeight: 700,
+            fontSize: "12px",
+            padding: "6px 14px",
+            height: "auto",
+            borderRadius: "9999px",
+            border: "none",
+            boxShadow: "0 4px 10px rgba(220, 38, 38, 0.35)",
+            whiteSpace: "nowrap",
+          },
+        })
+        return { ok: false, error, code: "ORDER_TYPE_MISMATCH" }
+      }
+      if (normalizedCart.length === 0) setCartMode(currentMode)
 
       const authed = isUserAuthenticated()
       if (!authed) {
@@ -491,22 +661,72 @@ export function CartProvider({ children }) {
         return { ok: true }
       }
 
+      const key = cartLineKey(item)
+      const qtyToAdd = Number(item.quantity) || 1
+      const existingLine = normalizedCart.find((i) => cartLineKey(i) === key)
+
+      // Same line already in the cart: bump it locally and sync in the background.
+      if (existingLine && item.itemType !== "addon") {
+        const nextQty = (pendingQtyRef.current.get(key)?.qty ?? existingLine.quantity) + qtyToAdd
+        pendingQtyRef.current.set(key, { qty: nextQty, lineId: existingLine.lineItemId || existingLine.id })
+        setCart((prev) =>
+          normalizeCartData(prev).map((i) => (cartLineKey(i) === key ? { ...i, quantity: nextQty } : i)),
+        )
+        triggerAddAnimation({ ...item, id: existingLine.id }, sourcePosition)
+        scheduleFlush(key)
+        return { ok: true }
+      }
+
+      // New line: show it right away when the server will almost surely accept it
+      // (empty cart or same restaurant). Otherwise wait, so a mismatch never flashes in.
+      const optimistic =
+        item.itemType !== "addon" &&
+        (normalizedCart.length === 0 ||
+          (Boolean(item.restaurantId) &&
+            normalizedCart.every((i) => String(i.restaurantId || "") === String(item.restaurantId))))
+      const tempLineId =
+        item.id || buildCartLineId(item.itemId || item.productId || item.id, item.variantId || "")
+
+      if (optimistic) {
+        addInflightRef.current.add(key)
+        setCart((prev) => [
+          ...normalizeCartData(prev),
+          { ...item, id: tempLineId, lineItemId: tempLineId, quantity: qtyToAdd },
+        ])
+        triggerAddAnimation({ ...item, id: tempLineId }, sourcePosition)
+      }
+
       const seq = ++mutationSeqRef.current
       try {
         const response = await foodCartAPI.addItem({
           itemId: item.itemId || item.productId || item.foodId || item.id,
           variantId: item.variantId || "",
-          quantity: Number(item.quantity) || 1,
+          quantity: qtyToAdd,
           ...(item.itemType === "addon" ? { itemType: "addon" } : {}),
         })
+        const payload = extractCartPayload(response)
+        if (optimistic) {
+          addInflightRef.current.delete(key)
+          // Taps made while the add was in flight were kept locally; point them at the real line.
+          const entry = pendingQtyRef.current.get(key)
+          const serverLine = normalizeCartData(payload.items).find((l) => cartLineKey(l) === key)
+          if (entry && serverLine) entry.lineId = serverLine.lineItemId
+          applyServerCart(payload)
+          if (entry) flushLine(key)
+          return { ok: true, cart: payload.items }
+        }
         if (seq !== mutationSeqRef.current) {
           return { ok: true }
         }
-        const payload = extractCartPayload(response)
         applyServerCart(payload)
         triggerAddAnimation(item, sourcePosition)
         return { ok: true, cart: payload.items }
       } catch (err) {
+        if (optimistic) {
+          addInflightRef.current.delete(key)
+          pendingQtyRef.current.delete(key)
+          setCart((prev) => normalizeCartData(prev).filter((i) => i.id !== tempLineId))
+        }
         const code = err?.response?.data?.code || err?.code
         const message = apiErrorMessage(err)
         if (code === "RESTAURANT_MISMATCH" || /another restaurant|already contains/i.test(message)) {
@@ -515,7 +735,7 @@ export function CartProvider({ children }) {
         return { ok: false, error: message }
       }
     },
-    [applyServerCart, normalizedCart],
+    [applyServerCart, normalizedCart, isCartModeMismatch, cartMode, currentMode, setCartMode, clearCart, scheduleFlush, flushLine],
   )
 
   const removeFromCart = useCallback(
@@ -568,84 +788,46 @@ export function CartProvider({ children }) {
       const lineId = existingItem?.lineItemId || existingItem?.id || resolvedItemId
       if (!lineId) return
 
-      // Collapse rapid clicks on the same line into the latest quantity.
-      const prev = inflightQtyRef.current.get(lineId)
-      if (prev?.controller) {
-        try {
-          prev.controller.abort()
-        } catch {
-          // ignore
-        }
+      // Optimistic: the stepper moves instantly; the server is synced (debounced) behind it.
+      const key = cartLineKey(existingItem || { id: resolvedItemId })
+      const nextQty = Math.max(0, Math.floor(Number(quantity) || 0))
+      if (existingItem && nextQty < existingItem.quantity) {
+        triggerRemoveAnimation(existingItem, sourcePosition, productInfo)
+      } else if (existingItem && nextQty > existingItem.quantity) {
+        triggerAddAnimation(existingItem, sourcePosition)
       }
-      const controller = typeof AbortController !== "undefined" ? new AbortController() : null
-      const seq = ++mutationSeqRef.current
-      inflightQtyRef.current.set(lineId, { seq, controller })
-
-      try {
-        if (quantity <= 0) {
-          const response = await foodCartAPI.removeItem(lineId)
-          if (seq !== mutationSeqRef.current) return
-          applyServerCart(extractCartPayload(response))
-          triggerRemoveAnimation(existingItem, sourcePosition, productInfo)
-          return
-        }
-
-        if (existingItem && quantity < existingItem.quantity) {
-          triggerRemoveAnimation(existingItem, sourcePosition, productInfo)
-        }
-
-        const response = await foodCartAPI.updateItem(lineId, { quantity })
-        if (seq !== mutationSeqRef.current) return
-        applyServerCart(extractCartPayload(response))
-      } catch (err) {
-        if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") return
-        debugError("updateQuantity failed", err)
-      } finally {
-        const current = inflightQtyRef.current.get(lineId)
-        if (current?.seq === seq) inflightQtyRef.current.delete(lineId)
-      }
+      pendingQtyRef.current.set(key, { qty: nextQty, lineId })
+      setCart((prev) => {
+        const safePrev = normalizeCartData(prev)
+        return nextQty <= 0
+          ? safePrev.filter((i) => i.id !== resolvedItemId)
+          : safePrev.map((i) => (i.id === resolvedItemId ? { ...i, quantity: nextQty } : i))
+      })
+      scheduleFlush(key)
     },
-    [applyServerCart, normalizedCart],
+    [normalizedCart, scheduleFlush],
   )
 
   const getCartCount = useCallback(
-    () => normalizedCart.reduce((total, item) => total + (item.quantity || 0), 0),
-    [normalizedCart],
+    () => visibleCart.reduce((total, item) => total + (item.quantity || 0), 0),
+    [visibleCart],
   )
 
   const isInCart = useCallback(
     (itemId, variantId = "") => {
-      const resolvedItemId = resolveCartEntryId(normalizedCart, itemId, variantId)
-      return normalizedCart.some((i) => i.id === resolvedItemId)
+      const resolvedItemId = resolveCartEntryId(visibleCart, itemId, variantId)
+      return visibleCart.some((i) => i.id === resolvedItemId)
     },
-    [normalizedCart],
+    [visibleCart],
   )
 
   const getCartItem = useCallback(
     (itemId, variantId = "") => {
-      const resolvedItemId = resolveCartEntryId(normalizedCart, itemId, variantId)
-      return normalizedCart.find((i) => i.id === resolvedItemId) || null
+      const resolvedItemId = resolveCartEntryId(visibleCart, itemId, variantId)
+      return visibleCart.find((i) => i.id === resolvedItemId) || null
     },
-    [normalizedCart],
+    [visibleCart],
   )
-
-  const clearCart = useCallback(async () => {
-    if (!isUserAuthenticated()) {
-      setCart([])
-      clearGuestCartStorage()
-      return { ok: true }
-    }
-    const seq = ++mutationSeqRef.current
-    try {
-      const response = await foodCartAPI.clearCart()
-      if (seq !== mutationSeqRef.current) return { ok: true }
-      applyServerCart(extractCartPayload(response))
-      return { ok: true }
-    } catch (err) {
-      debugError("clearCart failed", err)
-      return { ok: false, error: apiErrorMessage(err) }
-    }
-  }, [applyServerCart])
 
   const replaceCart = useCallback(
     async (items) => {
@@ -745,12 +927,12 @@ export function CartProvider({ children }) {
   )
 
   const refreshCart = useCallback(async () => {
-    if (!isUserAuthenticated()) return normalizedCart
+    if (!isUserAuthenticated()) return visibleCart
     return loadDbCart()
-  }, [loadDbCart, normalizedCart])
+  }, [loadDbCart, visibleCart])
 
   const cartForAnimation = useMemo(() => {
-    const items = normalizedCart.map((item) => ({
+    const items = visibleCart.map((item) => ({
       product: {
         id: item.id,
         name: item.name,
@@ -758,28 +940,30 @@ export function CartProvider({ children }) {
       },
       quantity: item.quantity || 1,
     }))
-    const itemCount = normalizedCart.reduce((total, item) => total + (item.quantity || 0), 0)
-    const total = normalizedCart.reduce(
+    const itemCount = visibleCart.reduce((total, item) => total + (item.quantity || 0), 0)
+    const total = visibleCart.reduce(
       (sum, item) => sum + (item.price || 0) * (item.quantity || 0),
       0,
     )
     return { items, itemCount, total }
-  }, [normalizedCart])
+  }, [visibleCart])
 
   const value = useMemo(
     () => ({
       _isProvider: true,
-      cart: normalizedCart,
-      // Foodie compatibility: delivery/takeaway share the same server cart when logged in.
-      deliveryCart: normalizedCart,
-      takeawayCart: normalizedCart,
+      cart: visibleCart,
+      // Foodie compatibility: delivery/takeaway share the same server cart when logged in;
+      // it is exposed only to the tab it was started from (see cartMode).
+      deliveryCart: cartMode === "takeaway" ? [] : normalizedCart,
+      takeawayCart: cartMode === "takeaway" ? normalizedCart : [],
+      cartMode,
       items: cartForAnimation.items,
       itemCount: cartForAnimation.itemCount,
       total: cartForAnimation.total,
       cartReady,
-      couponCode,
-      restaurantId,
-      restaurantName,
+      couponCode: isCartModeMismatch ? "" : couponCode,
+      restaurantId: isCartModeMismatch ? null : restaurantId,
+      restaurantName: isCartModeMismatch ? "" : restaurantName,
       lastAddEvent,
       lastRemoveEvent,
       addToCart,
@@ -795,7 +979,10 @@ export function CartProvider({ children }) {
       refreshCart,
     }),
     [
+      visibleCart,
       normalizedCart,
+      cartMode,
+      isCartModeMismatch,
       cartForAnimation,
       cartReady,
       couponCode,

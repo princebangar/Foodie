@@ -12,6 +12,8 @@ import { Bell, ChevronDown, ChevronUp, Clock, IndianRupee, MapPin, ShoppingBag, 
 import { useNavigate } from '@/lib/router';
 import { AppImage, Text } from '@/native/ui';
 import { alpha, colors, restaurantTheme, shadow, sp } from '@/theme';
+import { isBogoFreeLine, bogoDishName, getBogoFreeUnitValue } from '@food/utils/bogo';
+import { BogoBadge, BogoFreePrice } from '@food/components/BogoOrderBits';
 
 function PulseView({ children }) {
   const v = useRef(new Animated.Value(1)).current;
@@ -170,7 +172,8 @@ export default function NewOrderNotification({ order, onClose, onViewOrder }) {
                           </View>
                           {item.image ? <ItemImage uri={item.image} /> : null}
                           <View style={styles.itemTextCol}>
-                            <Text style={styles.itemName}>{item.name}</Text>
+                            <Text style={styles.itemName}>{isBogoFreeLine(item) ? bogoDishName(item) : item.name}</Text>
+                            {isBogoFreeLine(item) ? <BogoBadge style={{ marginTop: sp(1) }} /> : null}
                             {variantText ? (
                               <View style={styles.wrapRow}>
                                 <View style={styles.variantPill}>
@@ -192,9 +195,17 @@ export default function NewOrderNotification({ order, onClose, onViewOrder }) {
                             ) : null}
                           </View>
                         </View>
-                        <View style={styles.priceBox}>
-                          <Text style={styles.priceText}>₹{(item.price * item.quantity).toFixed(2)}</Text>
-                        </View>
+                        {isBogoFreeLine(item) ? (
+                          <BogoFreePrice
+                            unitValue={getBogoFreeUnitValue(order.items, item)}
+                            quantity={item.quantity}
+                            style={[styles.priceBox, { backgroundColor: colors.emerald[50], borderColor: colors.emerald[200] }]}
+                          />
+                        ) : (
+                          <View style={styles.priceBox}>
+                            <Text style={styles.priceText}>₹{(item.price * item.quantity).toFixed(2)}</Text>
+                          </View>
+                        )}
                       </LinearGradient>
                     );
                   })}

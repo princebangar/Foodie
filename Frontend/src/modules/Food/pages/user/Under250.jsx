@@ -12,7 +12,6 @@ import { useProfile } from "@food/context/ProfileContext"
 import { Avatar, AvatarFallback, AvatarImage } from "@food/components/ui/avatar"
 import { getRestaurantAvailabilityStatus } from "@food/utils/restaurantAvailability"
 import under250Banner from "@food/assets/banners/under250_banner.jpg"
-import homeBannerRed from "@food/assets/banners/home-banner-red-clean.png"
 import AddToCartAnimation from "@food/components/user/AddToCartAnimation"
 import OptimizedImage from "@food/components/OptimizedImage"
 import api from "@food/api"
@@ -1031,6 +1030,23 @@ export default function Under250({ isTabActive = true }) {
       }
       removeFromCart(lineItemId, sourcePosition, productInfo)
     } else {
+      // addToCart is async: roll back the optimistic quantity if the cart rejected the item.
+      const addOrRollback = (onAdded) =>
+        Promise.resolve(addToCart(cartItem, sourcePosition)).then((result) => {
+          if (result?.ok === false) {
+            setQuantities((prev) => ({
+              ...prev,
+              [lineItemId]: getCartItem(lineItemId)?.quantity || 0,
+            }))
+            // Cart-mode conflicts already show their own toast from CartContext.
+            if (result.code !== "ORDER_TYPE_MISMATCH") {
+              toast.error(result.error || 'Cannot add item from different restaurant. Please clear cart first.')
+            }
+            return
+          }
+          onAdded?.()
+        })
+
       const existingCartItem = getCartItem(lineItemId)
       if (existingCartItem) {
         const productInfo = {
@@ -1040,28 +1056,22 @@ export default function Under250({ isTabActive = true }) {
         }
 
         if (newQuantity > existingCartItem.quantity && sourcePosition) {
-          const result = addToCart(cartItem, sourcePosition)
-          if (result?.ok === false) {
-            toast.error(result.error || 'Cannot add item from different restaurant. Please clear cart first.')
-            return
-          }
-          if (newQuantity > existingCartItem.quantity + 1) {
-            updateQuantity(lineItemId, newQuantity)
-          }
+          addOrRollback(() => {
+            if (newQuantity > existingCartItem.quantity + 1) {
+              updateQuantity(lineItemId, newQuantity)
+            }
+          })
         } else if (newQuantity < existingCartItem.quantity && sourcePosition) {
           updateQuantity(lineItemId, newQuantity, sourcePosition, productInfo)
         } else {
           updateQuantity(lineItemId, newQuantity)
         }
       } else {
-        const result = addToCart(cartItem, sourcePosition)
-        if (result?.ok === false) {
-          toast.error(result.error || 'Cannot add item from different restaurant. Please clear cart first.')
-          return
-        }
-        if (newQuantity > 1) {
-          updateQuantity(lineItemId, newQuantity)
-        }
+        addOrRollback(() => {
+          if (newQuantity > 1) {
+            updateQuantity(lineItemId, newQuantity)
+          }
+        })
       }
     }
   }

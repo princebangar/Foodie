@@ -9,6 +9,8 @@ import DiningBookings, { usePendingBookingCount } from "./DiningBookings"
 import { Modal } from "./kit"
 import { Card, Empty, PageHeader, PrepStepper, Spinner, StatusBadge, btn, timeAgo } from "./ui"
 import { LiveDishBanner } from "@food/components/restaurant/LiveDishNotice"
+import { isBogoFreeLine, bogoDishName } from "@food/utils/bogo"
+import { BogoBadge } from "@food/components/BogoOrderBits"
 
 // Orders that are finished (these move to Full History, exactly like the phone "All orders" list).
 const isFinished = (o) => isCompleted(o) || isCancelled(o) || /refund|reject/.test(String(o.status))
@@ -159,7 +161,12 @@ function OrderPanel({ order: o, now, readOnly, onClose, onChanged }) {
       autoTable(doc, {
         startY: 82,
         head: [["Item", "Qty", "Price", "Total"]],
-        body: o.items.map((it) => [it.variantName ? `${it.name} (${it.variantName})` : it.name || "Item", it.quantity || 1, `Rs ${(it.price || 0).toFixed(2)}`, `Rs ${((it.price || 0) * (it.quantity || 1)).toFixed(2)}`]),
+        body: o.items.map((it) => {
+          const name = isBogoFreeLine(it) ? `${bogoDishName(it)} (Buy 1 Get 1 offer)` : it.name || "Item"
+          const label = it.variantName ? `${name} (${it.variantName})` : name
+          if (isBogoFreeLine(it)) return [label, it.quantity || 1, "FREE", "FREE"]
+          return [label, it.quantity || 1, `Rs ${(it.price || 0).toFixed(2)}`, `Rs ${((it.price || 0) * (it.quantity || 1)).toFixed(2)}`]
+        }),
         theme: "striped",
         headStyles: { fillColor: [0, 0, 0], textColor: 255, fontStyle: "bold" },
         styles: { fontSize: 9 },
@@ -223,7 +230,7 @@ function OrderPanel({ order: o, now, readOnly, onClose, onChanged }) {
 
       <ul className="mt-4 divide-y divide-slate-100 text-sm">
         {o.items.map((it, i) => (
-          <li key={i} className="py-2.5"><b>{it.quantity || 1}×</b> {it.name}{it.variantName ? <span className="text-slate-500"> ({it.variantName})</span> : null}</li>
+          <li key={i} className="py-2.5"><b>{it.quantity || 1}×</b> {isBogoFreeLine(it) ? bogoDishName(it) : it.name}{it.variantName ? <span className="text-slate-500"> ({it.variantName})</span> : null}{isBogoFreeLine(it) && <BogoBadge className="ml-1.5 align-middle" />}</li>
         ))}
       </ul>
       <div className="mt-2 flex justify-between border-t border-slate-200 pt-3 font-bold"><span>Total</span><span className="tabular-nums">{inr2(o.total)}</span></div>

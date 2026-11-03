@@ -13,7 +13,7 @@ Where the prompt left a choice open, the safer option was taken and written down
    splash leaves; tagline "DELIVER · EARN · GROW".
 4. **Keystore:** new PKCS12 upload key `C:/Users/Prince/.foodie/foodie-delivery-upload.jks`, alias `foodie-delivery`,
    random password in `DELIVERY_KEYSTORE_README.txt` next to it, Gradle properties `FOODIE_DELIVERY_*`.
-   SHA-1 `B9:5D:06:FE:D4:7B:B3:F5:BC:75:7D:36:5C:C4:D4:90:77:DF:9F:43`.
+   SHA-1 `B3:E8:F4:AC:DD:60:9A:7F:21:3C:9C:00:14:CF:16:67:CC:4D:5C:9B`.
 5. **Packages:** the Captain app's package set unchanged (one `npm ci` from its lockfile); unused modules are harmless and
    removing them risked a second native build.
 6. **Fonts:** the same embedded fonts as the Captain app (they already include the weights the web loads: Nunito Sans

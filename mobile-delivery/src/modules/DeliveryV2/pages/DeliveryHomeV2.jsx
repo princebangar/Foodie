@@ -3,7 +3,7 @@
 // with zoom / simulation / centre buttons, the trip panels (pickup, drop, verify & complete, summary), the incoming
 // order popup (ringing until accept / pass), GPS tracking while online (HTTP + socket + Firebase for the active order),
 // the 15 s heartbeat, the available-order poller and the emergency / notifications bottom popups.
-// Same logic, texts, API calls and test buttons (the DEV "SIM" header toggle and the map's Play simulation button stay).
+// Same logic, texts, API calls and test buttons (the "SIM" header toggle and the map's Play simulation button show only while admin "Testing simulation for driver" is ON).
 // Native (platform only):
 //   - Kept-alive screen (DeliveryTabKeepAlive): the layout draws the bottom bar. What the web did while mounted runs only
 //     while this screen is on screen (useDeliveryTabActive): authRefreshFailed listener, the simulation glide, the GPS
@@ -24,9 +24,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Bell, AlertTriangle,
-  Plus, Minus, Navigation2, Target, Play, CheckCircle2, Clock, ChevronDown,
+  Plus, Minus, Navigation2, Target, Play, Square, CheckCircle2, Clock, ChevronDown,
   Contact, Phone, Navigation, Package, Power,
 } from 'lucide-react-native';
+import apiClient from '@food/api/axios';
 import { useNavigate } from '@/lib/router';
 import { toast } from '@/lib/toast';
 import { setRiderBackgroundHandler } from '@/lib/riderLocation';
@@ -67,6 +68,8 @@ import { TabShownProvider, useTabShown } from '@/native/ui/tabShown';
 const SUB_TABS = [['pocket', memo(PocketV2)], ['history', memo(HistoryV2)], ['profile', memo(ProfileV2)]];
 
 // web /assets/images/profile_avatar.webp, bundled so it shows offline
+// Simulation buttons: the web's inline orange (#EA580C), not the delivery theme colour.
+const SIM_ORANGE = '#EA580C';
 const DEFAULT_AVATAR = require('../../../assets/public/images/profile_avatar.webp');
 
 const roundedShadow = {
@@ -269,6 +272,9 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
 
   const [zoom, setZoom] = useState(14);
   const [isSimMode, setIsSimMode] = useState(false);
+  // Admin > Customization Settings > "Testing simulation for driver" (default OFF).
+  // The simulation buttons only show while that toggle is ON.
+  const [simAllowed, setSimAllowed] = useState(false);
   const [simPath, setSimPath] = useState([]);
   const [simIndex, setSimIndex] = useState(0);
   const [, setSimProgress] = useState(0); // 0 to 1 between points
@@ -314,6 +320,34 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     window.addEventListener('authRefreshFailed', onAuthFailure);
     return () => window.removeEventListener('authRefreshFailed', onAuthFailure);
   }, [handleLogout, tabActive]);
+
+  // Read the admin "Testing simulation for driver" toggle on open and whenever the app comes back
+  // (document visibilitychange = AppState active, lib/webCompat.js).
+  useEffect(() => {
+    let cancelled = false;
+    const loadSimToggle = async () => {
+      try {
+        const res = await apiClient.get('/food/public/customization-settings');
+        if (!cancelled) setSimAllowed(res?.data?.data?.driver_simulation_enabled === true);
+      } catch {
+        // keep the last known value
+      }
+    };
+    loadSimToggle();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') loadSimToggle();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
+
+  // Toggle turned OFF while a simulation runs: stop it so real GPS takes over again.
+  useEffect(() => {
+    if (!simAllowed && isSimMode) setIsSimMode(false);
+  }, [simAllowed, isSimMode]);
 
   // 0. Auto-Simulation Effect (High-Precision Smooth Glide)
   const lastSimUpdateSentAt = useRef(0);
@@ -684,7 +718,9 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
   // If watchPosition stops firing (e.g. device stationary), this pings the backend periodically.
   // This keeps the token fresh (via 401 interceptor) and keeps the Delivery Partner "online" in the backend.
   useEffect(() => {
-    if (!isOnline || !tabActive) return undefined;
+    // Feed only: on Pocket / History / Profile, useRiderLocationSync sends live GPS; this ping
+    // would overwrite it with the last Feed position.
+    if (!isOnline || !tabActive || currentTab !== 'feed') return undefined;
 
     const pingInterval = setInterval(() => {
       const now = Date.now();
@@ -701,7 +737,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     }, 10000); // Check every 10 seconds
 
     return () => clearInterval(pingInterval);
-  }, [isOnline, tabActive]);
+  }, [isOnline, tabActive, currentTab]);
 
   useEffect(() => {
     if (!tabActive || !claimedOrderId) return;
@@ -786,8 +822,21 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
 
   useEffect(() => {
     if (!tabActive) return;
+    if (orderStatusUpdate?.status === 'reassigned') {
+      toast.info(orderStatusUpdate.message || 'This request has been assigned to another rider');
+      const removedId = orderStatusUpdate.orderId || orderStatusUpdate.orderMongoId;
+      if (removedId) removeAcceptedOrder(removedId);
+      clearOrderStatusUpdate();
+      return;
+    }
     if (orderStatusUpdate) {
-      if (orderStatusUpdate.status === 'cancelled') {
+      // Restaurant / admin cancel sends only orderStatus ("cancelled_by_restaurant" etc.), and an
+      // admin delete sends status "deleted" — both must close the rider's trip too.
+      const isCancelled =
+        orderStatusUpdate.status === 'cancelled' ||
+        orderStatusUpdate.status === 'deleted' ||
+        String(orderStatusUpdate.orderStatus || '').startsWith('cancelled');
+      if (isCancelled) {
         toast.error('Order cancelled');
         const cancelledId =
           orderStatusUpdate.orderId ||
@@ -989,13 +1038,23 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                   <Minus size={20} color={colors.gray[900]} strokeWidth={2.75} />
                 </Pressable>
               </View>
-              <Pressable onPress={handleSimButton} style={[styles.fab, isSimMode ? styles.fabSim : styles.fabIdle]}>
-                <View style={[styles.fabRing, { borderColor: isSimMode ? colors.white : deliveryTheme.primary }]}>
-                  <Pulse active={isSimMode}>
-                    <Play size={16} color={isSimMode ? colors.white : deliveryTheme.primary} fill={isSimMode ? colors.white : deliveryTheme.primary} style={styles.playNudge} />
-                  </Pulse>
-                </View>
-              </Pressable>
+              {/* Simulation button: only when admin "Testing simulation for driver" is ON (default OFF) */}
+              {simAllowed ? (
+                <Pressable
+                  onPress={handleSimButton}
+                  accessibilityLabel={isSimMode ? 'Stop simulation' : 'Start simulation'}
+                  accessibilityState={{ selected: isSimMode }}
+                  style={[styles.fab, isSimMode ? styles.fabSimOn : styles.fabSimOff]}
+                >
+                  <View style={[styles.fabRing, { borderColor: isSimMode ? colors.white : SIM_ORANGE }]}>
+                    {isSimMode ? (
+                      <Square size={14} color={colors.white} fill={colors.white} />
+                    ) : (
+                      <Play size={16} color={SIM_ORANGE} fill={SIM_ORANGE} style={styles.playNudge} />
+                    )}
+                  </View>
+                </Pressable>
+              ) : null}
               <Pressable
                 onPress={() => mapRef.current?.setOptions({ gestureHandling: 'greedy' })}
                 style={({ pressed }) => [styles.fab, styles.fabIdle, pressed && styles.pressedSmall]}
@@ -1046,12 +1105,19 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
               </Pressable>
               <OnlineToggle isOnline={isOnline} onPress={handleToggleOnline} />
 
-              {/* DEV SIMULATION TOGGLE */}
-              {__DEV__ ? (
-                <Pressable onPress={() => setIsSimMode(!isSimMode)}>
-                  <Pulse active={isSimMode} style={[styles.simToggle, isSimMode ? styles.simToggleOn : styles.simToggleOff]}>
-                    <Text style={[styles.simToggleText, { color: isSimMode ? colors.white : alpha(colors.white, 0.4) }]}>SIM</Text>
-                  </Pulse>
+              {/* SIMULATION TOGGLE (dev + live, only when admin "Testing simulation for driver" is ON) */}
+              {simAllowed ? (
+                <Pressable
+                  onPress={() => setIsSimMode(!isSimMode)}
+                  accessibilityState={{ selected: isSimMode }}
+                  style={({ pressed }) => [styles.simToggle, isSimMode ? styles.simToggleOn : styles.simToggleOff, pressed && styles.pressed]}
+                >
+                  {isSimMode ? (
+                    <Pulse active style={styles.simToggleDot} />
+                  ) : (
+                    <Play size={12} color={colors.white} fill={colors.white} />
+                  )}
+                  <Text style={styles.simToggleText}>SIM</Text>
                 </Pressable>
               ) : null}
             </View>
@@ -1421,10 +1487,12 @@ const styles = StyleSheet.create({
   toggleText: { fontSize: 9, lineHeight: 12, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.9 },
   toggleTextOn: { color: colors.emerald[400], marginRight: 24 },
   toggleTextOff: { color: colors.slate[400], marginLeft: 24 },
-  simToggle: { paddingHorizontal: 12, height: 32, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  simToggleOn: { backgroundColor: deliveryTheme.primary, borderColor: colors.orange[400] },
-  simToggleOff: { backgroundColor: alpha(colors.white, 0.1), borderColor: alpha(colors.white, 0.2) },
-  simToggleText: { fontSize: 9, lineHeight: 12, fontFamily: fonts.sora, fontWeight: '900' },
+  // web: inline colours (the delivery theme repaints Tailwind orange), h-8 px-3 rounded-full gap-1.5
+  simToggle: { flexDirection: 'row', gap: 6, paddingHorizontal: 12, height: 32, borderRadius: 999, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  simToggleOn: { backgroundColor: SIM_ORANGE, borderColor: '#FDBA74', shadowColor: SIM_ORANGE, shadowOpacity: 0.45, shadowRadius: 7, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
+  simToggleOff: { backgroundColor: 'rgba(255,255,255,0.14)', borderColor: 'rgba(255,255,255,0.4)' },
+  simToggleDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.white },
+  simToggleText: { fontSize: 10, lineHeight: 14, fontFamily: fonts.sora, fontWeight: '900', letterSpacing: 1, color: colors.white },
   headerBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 1, elevation: 8 },
   headerBtnRed: { backgroundColor: alpha(colors.red[500], 0.1), borderColor: alpha(colors.red[500], 0.2) },
   headerBtnBlue: { backgroundColor: deliveryTheme.primarySoft, borderColor: deliveryTheme.primaryBorder },
@@ -1505,6 +1573,8 @@ const styles = StyleSheet.create({
   fab: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.gray[100], elevation: 16, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 50, shadowOffset: { width: 0, height: 25 } },
   fabIdle: { backgroundColor: colors.white },
   fabSim: { backgroundColor: deliveryTheme.primary },
+  fabSimOn: { backgroundColor: SIM_ORANGE, borderWidth: 1, borderColor: '#FDBA74', shadowColor: SIM_ORANGE, shadowOpacity: 0.45, shadowRadius: 12, shadowOffset: { width: 0, height: 10 }, elevation: 10 },
+  fabSimOff: { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.gray[100] },
   fabRing: { width: 32, height: 32, borderRadius: 16, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   playNudge: { marginLeft: 2 },
 

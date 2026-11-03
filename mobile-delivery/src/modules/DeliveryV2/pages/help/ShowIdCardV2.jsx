@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Animated, Easing, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from "react-native";
+import { Animated, Easing, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { X, Loader2 } from "lucide-react-native";
+import { X, Loader2, BadgeCheck, Phone, Bike, CalendarDays, Hash, ShieldCheck } from "lucide-react-native";
 import { toast } from "@/lib/toast";
 import { AppImage, Screen, Text } from "@/native/ui";
 import { StatusBar } from "@/native/ui/SectionStatusBar";
-import { alpha, colors, fonts, shadow } from "@/theme";
+import { alpha, colors, shadow } from "@/theme";
 import { deliveryAPI } from "@food/api";
 import { useCompanyName } from "@food/hooks/useCompanyName";
 import useDeliveryBackNavigation from "../../hooks/useDeliveryBackNavigation";
@@ -34,7 +34,6 @@ export default function ShowIdCardV2() {
   const companyName = useCompanyName();
   const goBack = useDeliveryBackNavigation();
   const insets = useSafeAreaInsets();
-  const { height } = useWindowDimensions();
   const [loading, setLoading] = useState(true);
   const [profileData, setProfileData] = useState(null);
 
@@ -77,14 +76,13 @@ export default function ShowIdCardV2() {
     return status.charAt(0).toUpperCase() + status.slice(1);
   };
 
-  // Get status color (web: bg-green-500 is the delivery primary in the delivery theme)
-  const getStatusColor = () => {
-    if (!profileData) return PRIMARY;
-    const status = profileData.status?.toLowerCase() || (profileData.isActive ? 'active' : 'inactive');
-    if (status === 'active' || status === 'approved') return PRIMARY;
-    if (status === 'pending') return colors.yellow[500];
-    if (status === 'suspended' || status === 'blocked') return colors.red[500];
-    return colors.gray[500];
+  // Status chip colours (web: inline styles, so the delivery theme cannot repaint them)
+  const getStatusTone = () => {
+    const status = profileData?.status?.toLowerCase() || (profileData?.isActive ? 'active' : 'inactive');
+    if (status === 'active' || status === 'approved') return { bg: "#dcfce7", text: "#15803d", border: "#bbf7d0", verified: true };
+    if (status === 'pending') return { bg: "#fef9c3", text: "#a16207", border: "#fde68a", verified: false };
+    if (status === 'suspended' || status === 'blocked' || status === 'rejected') return { bg: "#fee2e2", text: "#b91c1c", border: "#fecaca", verified: false };
+    return { bg: "#f1f5f9", text: "#475569", border: "#e2e8f0", verified: false };
   };
 
   const getProfileImageUrl = () => {
@@ -136,106 +134,122 @@ export default function ShowIdCardV2() {
     id: profileData.deliveryId || profileData._id?.toString().slice(-8).toUpperCase() || "N/A",
     phone: profileData.phone || "N/A",
     status: getStatusDisplay(),
-    statusColor: getStatusColor(),
+    statusTone: getStatusTone(),
     validTill: formatValidDate(),
     vehicle: getVehicleDisplay(),
     profileImage: getProfileImageUrl()
   };
 
+  const details = [
+    { label: "Partner ID", value: idCardData.id, Icon: Hash },
+    { label: "Mobile", value: idCardData.phone, Icon: Phone },
+    idCardData.vehicle ? { label: "Vehicle", value: idCardData.vehicle, Icon: Bike } : null,
+    { label: "Valid till", value: idCardData.validTill, Icon: CalendarDays },
+  ].filter(Boolean);
+
+  const tone = idCardData.statusTone;
   return (
-    <View style={{ flex: 1, backgroundColor: colors.black }}>
+    <View style={{ flex: 1, backgroundColor: PAGE_BG }}>
       <StatusBar style="dark" />
-      <ScrollView style={styles.page} contentContainerStyle={{ minHeight: height, paddingBottom: insets.bottom }} bounces={false}>
-        {/* Top Grey Background Section */}
-        <View style={[styles.topBand, { height: 160 + insets.top }]}>
-          <LinearGradient colors={[alpha("#000000", 0.05), "transparent"]} style={StyleSheet.absoluteFill} />
-          {/* Profile Picture */}
-          <View style={styles.avatarWrap}>
-            <View style={styles.avatarRing}>
-              <AppImage src={idCardData.profileImage} fallback={DEFAULT_AVATAR} style={styles.avatar} contentFit="cover" accessibilityLabel={idCardData.name} />
-            </View>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ alignItems: "center", paddingHorizontal: 16, paddingTop: insets.top + 20, paddingBottom: insets.bottom + 40 }}
+        bounces={false}
+      >
+        <View style={styles.wrap}>
+          <View style={styles.topRow}>
+            <Text style={styles.title}>My ID Card</Text>
+            <Pressable onPress={goBack} accessibilityLabel="Close" style={({ pressed }) => [styles.close, pressed && { transform: [{ scale: 0.95 }] }]}>
+              <X size={20} color={INK} />
+            </Pressable>
           </View>
-        </View>
 
-        {/* Main White Content Area */}
-        <View style={[styles.main, { minHeight: height - 160 - insets.top }]}>
-          <View style={{ alignItems: "center" }}>
-            {/* Brand Name */}
-            <Text style={styles.brand}>{String(companyName || "").toUpperCase()}</Text>
+          <View style={styles.card}>
+            {/* Header band */}
+            <LinearGradient colors={["#15498b", "#0b2a52"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.band}>
+              <View style={styles.bubbleA} />
+              <View style={styles.bubbleB} />
+              <View style={styles.bandRow}>
+                <View>
+                  <Text style={styles.brand}>{String(companyName || "").toUpperCase()}</Text>
+                  <Text style={styles.brandSub}>DELIVERY PARTNER ID</Text>
+                </View>
+                <ShieldCheck size={28} color={alpha("#ffffff", 0.85)} />
+              </View>
+            </LinearGradient>
 
-            {/* Delivery Partner Title */}
-            <Text style={styles.h1}>PARTNER</Text>
-            <Text style={styles.h2}>ID CARD</Text>
-
-            {/* Active Status Badge */}
-            <View style={{ marginBottom: 32 }}>
-              <View style={[styles.statusBadge, { backgroundColor: idCardData.statusColor }]}>
-                <Text style={styles.statusText}>{idCardData.status.toUpperCase()}</Text>
+            {/* Photo */}
+            <View style={styles.photoRow}>
+              <View style={styles.avatarRing}>
+                <AppImage src={idCardData.profileImage} fallback={DEFAULT_AVATAR} style={styles.avatar} contentFit="cover" accessibilityLabel={idCardData.name} />
               </View>
             </View>
 
-            {/* Details Grid */}
-            <View style={{ width: "100%", gap: 32, marginTop: 16 }}>
-              <View style={{ alignItems: "center" }}>
-                <Text style={styles.name}>{idCardData.name.toUpperCase()}</Text>
-                <Text style={styles.caption}>FULL NAME</Text>
-              </View>
-
-              <View style={{ flexDirection: "row", gap: 32, width: "100%" }}>
-                <View style={{ flex: 1, alignItems: "center" }}>
-                  <Text style={styles.value}>{idCardData.id}</Text>
-                  <Text style={styles.smallCaption}>PARTNER ID</Text>
-                </View>
-                <View style={{ flex: 1, alignItems: "center" }}>
-                  <Text style={styles.value}>{idCardData.phone}</Text>
-                  <Text style={styles.smallCaption}>MOBILE</Text>
-                </View>
-              </View>
-
-              {idCardData.vehicle ? (
-                <View style={styles.vehicleBox}>
-                  <Text style={styles.value}>{idCardData.vehicle.toUpperCase()}</Text>
-                  <Text style={styles.smallCaption}>REGISTERED VEHICLE</Text>
-                </View>
-              ) : null}
-
-              <View style={{ paddingTop: 16, borderTopWidth: 1, borderTopColor: colors.gray[100] }}>
-                <Text style={styles.legal}>
-                  {`THIS ID CARD IS ISSUED FOR ESSENTIAL DELIVERY SERVICES ONLY.\nVALID ON: ${String(idCardData.validTill).toUpperCase()}`}
-                </Text>
+            {/* Name + status */}
+            <View style={styles.nameBlock}>
+              <Text style={styles.name}>{idCardData.name.toUpperCase()}</Text>
+              <View style={[styles.chip, { backgroundColor: tone.bg, borderColor: tone.border }]}>
+                {tone.verified ? (
+                  <BadgeCheck size={16} color={tone.text} />
+                ) : (
+                  <View style={[styles.chipDot, { backgroundColor: tone.text }]} />
+                )}
+                <Text style={[styles.chipText, { color: tone.text }]}>{idCardData.status.toUpperCase()}</Text>
               </View>
             </View>
+
+            {/* Details */}
+            <View style={styles.details}>
+              {details.map(({ label, value, Icon }, i) => (
+                <View key={label} style={[styles.detailRow, i > 0 && { borderTopWidth: 1, borderTopColor: LINE }]}>
+                  <View style={styles.detailIcon}>
+                    <Icon size={16} color={PRIMARY} />
+                  </View>
+                  <Text style={styles.detailLabel}>{label}</Text>
+                  <Text style={styles.detailValue}>{String(value).toUpperCase()}</Text>
+                </View>
+              ))}
+            </View>
+
+            {/* Footer */}
+            <Text style={styles.footer}>This ID card is issued for essential delivery services only.</Text>
           </View>
         </View>
       </ScrollView>
-
-      {/* Close Button - Top Right */}
-      <Pressable onPress={goBack} style={({ pressed }) => [styles.close, { top: insets.top + 16 }, pressed && { backgroundColor: colors.gray[200] }]}>
-        <X size={24} color={colors.black} />
-      </Pressable>
     </View>
   );
 }
 
+const PAGE_BG = "#eef3fb";
+const INK = "#0f1724";
+const LINE = "#e3eaf5";
+
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   goBackBtn: { paddingHorizontal: 16, paddingVertical: 8, backgroundColor: PRIMARY, borderRadius: 10 },
-  page: { flex: 1, width: "100%", maxWidth: 448, alignSelf: "center", backgroundColor: colors.gray[100] },
-  close: { position: "absolute", right: 16, padding: 8, borderRadius: 9999, zIndex: 30, backgroundColor: alpha("#ffffff", 0.5) },
-  topBand: { backgroundColor: colors.gray[300], zIndex: 10 },
-  avatarWrap: { position: "absolute", bottom: -78, left: 0, right: 0, alignItems: "center", zIndex: 10 },
-  avatarRing: { padding: 6, backgroundColor: colors.white, borderRadius: 9999, ...shadow["2xl"] },
-  avatar: { width: 144, height: 144, borderRadius: 72, borderWidth: 4, borderColor: colors.gray[100] },
-  main: { backgroundColor: colors.white, paddingTop: 80, paddingHorizontal: 17.6, paddingBottom: 48 },
-  brand: { fontSize: 12, lineHeight: 16, fontFamily: fonts.sora, fontWeight: "900", letterSpacing: 3.6, color: PRIMARY, marginBottom: 8, textAlign: "center" },
-  h1: { fontFamily: fonts.sora, fontSize: 36, lineHeight: 45, fontWeight: "900", color: colors.gray[900], marginBottom: 4 },
-  h2: { fontFamily: fonts.sora, fontSize: 20, lineHeight: 28, fontWeight: "700", color: colors.gray[400], letterSpacing: 2, marginBottom: 24 },
-  statusBadge: { paddingHorizontal: 32, paddingVertical: 10, borderRadius: 9999, elevation: 8, shadowColor: PRIMARY, shadowOpacity: 0.2, shadowRadius: 15, shadowOffset: { width: 0, height: 10 } },
-  statusText: { color: colors.white, fontSize: 12, lineHeight: 16, fontFamily: fonts.sora, fontWeight: "900", letterSpacing: 2.4 },
-  name: { fontFamily: fonts.sora, fontSize: 24, lineHeight: 32, fontWeight: "900", color: colors.gray[950], letterSpacing: -0.6, textAlign: "center" },
-  caption: { color: colors.gray[400], fontWeight: "700", fontSize: 10, lineHeight: 14, letterSpacing: 2, marginTop: 4 },
-  value: { fontFamily: fonts.sora, fontSize: 14, lineHeight: 20, fontWeight: "900", color: colors.gray[950], textAlign: "center" },
-  smallCaption: { fontSize: 9, lineHeight: 12, fontWeight: "700", color: colors.gray[400], letterSpacing: 0.9 },
-  vehicleBox: { alignItems: "center", backgroundColor: colors.gray[50], padding: 16, borderRadius: 16, borderWidth: 1, borderColor: "#D1DCEB", elevation: 3, shadowColor: "#112743", shadowOpacity: 0.24, shadowRadius: 14, shadowOffset: { width: 0, height: 10 } },
-  legal: { fontSize: 10, lineHeight: 20, fontWeight: "700", color: colors.gray[400], letterSpacing: 1, textAlign: "center" },
+  wrap: { width: "100%", maxWidth: 384 },
+  topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16 },
+  title: { fontSize: 16, lineHeight: 24, fontWeight: "700", color: INK },
+  close: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.white, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#d1dceb", ...shadow.sm },
+  card: { backgroundColor: colors.white, borderRadius: 28, overflow: "hidden", borderWidth: 1, borderColor: LINE, elevation: 8, shadowColor: "#112743", shadowOpacity: 0.35, shadowRadius: 20, shadowOffset: { width: 0, height: 18 } },
+  band: { height: 128, overflow: "hidden" },
+  bubbleA: { position: "absolute", right: -40, top: -48, width: 160, height: 160, borderRadius: 80, backgroundColor: alpha("#ffffff", 0.08) },
+  bubbleB: { position: "absolute", left: -32, bottom: -60, width: 144, height: 144, borderRadius: 72, backgroundColor: alpha("#ffffff", 0.06) },
+  bandRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 16 },
+  brand: { fontSize: 15, lineHeight: 22, fontWeight: "900", letterSpacing: 2.7, color: colors.white },
+  brandSub: { fontSize: 10, lineHeight: 14, fontWeight: "600", letterSpacing: 2, color: alpha("#ffffff", 0.7) },
+  photoRow: { alignItems: "center", marginTop: -56 },
+  avatarRing: { padding: 4, backgroundColor: colors.white, borderRadius: 9999, elevation: 6, shadowColor: "#112743", shadowOpacity: 0.45, shadowRadius: 12, shadowOffset: { width: 0, height: 10 } },
+  avatar: { width: 112, height: 112, borderRadius: 56, borderWidth: 3, borderColor: "#e7effa" },
+  nameBlock: { alignItems: "center", paddingHorizontal: 20, marginTop: 12 },
+  name: { fontSize: 22, lineHeight: 27, fontWeight: "900", letterSpacing: -0.5, color: INK, textAlign: "center" },
+  chip: { marginTop: 8, flexDirection: "row", alignItems: "center", gap: 6, borderRadius: 9999, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 6 },
+  chipDot: { width: 8, height: 8, borderRadius: 4 },
+  chipText: { fontSize: 11, lineHeight: 16, fontWeight: "700", letterSpacing: 1.5 },
+  details: { marginHorizontal: 20, marginTop: 20, borderRadius: 20, overflow: "hidden", backgroundColor: "#f5f8fd", borderWidth: 1, borderColor: LINE },
+  detailRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 12 },
+  detailIcon: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: "#e7effa" },
+  detailLabel: { fontSize: 12, lineHeight: 16, fontWeight: "600", color: "#4f5f77" },
+  detailValue: { flex: 1, fontSize: 13, lineHeight: 18, fontWeight: "700", color: INK, textAlign: "right" },
+  footer: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20, textAlign: "center", fontSize: 11, lineHeight: 18, fontWeight: "500", color: "#7a889c" },
 });

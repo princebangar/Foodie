@@ -19,6 +19,7 @@ let expireOffersInterval = null;
 let fssaiExpiryInterval = null;
 let paymentReconcileInterval = null;
 let refundRetryInterval = null;
+let dispatchSweepInterval = null;
 
 const gracefulShutdown = async (signal) => {
     logger.info(`${signal} received, starting graceful shutdown`);
@@ -35,6 +36,7 @@ const gracefulShutdown = async (signal) => {
             if (fssaiExpiryInterval) clearInterval(fssaiExpiryInterval);
             if (paymentReconcileInterval) clearInterval(paymentReconcileInterval);
             if (refundRetryInterval) clearInterval(refundRetryInterval);
+            if (dispatchSweepInterval) clearInterval(dispatchSweepInterval);
             logger.info('Graceful shutdown complete');
             process.exit(0);
         } catch (err) {
@@ -137,6 +139,18 @@ const startServer = async () => {
             }
         };
         refundRetryInterval = setInterval(runRefundRetry, 10 * 60 * 1000);
+
+        // Delivery orders whose rider-search retry was lost (Redis/worker down, deploy): restart the hunt.
+        const runDispatchSweep = async () => {
+            try {
+                const { resumeStalledDispatches } = await import('./src/modules/food/orders/services/order-dispatch.service.js');
+                const count = await resumeStalledDispatches();
+                if (count > 0) logger.info(`Dispatch sweep: restarted rider search for ${count} order(s)`);
+            } catch (err) {
+                logger.error(`Dispatch sweep error: ${err.message}`);
+            }
+        };
+        dispatchSweepInterval = setInterval(runDispatchSweep, 60 * 1000);
 
         process.on('SIGINT', () => gracefulShutdown('SIGINT'));
         process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

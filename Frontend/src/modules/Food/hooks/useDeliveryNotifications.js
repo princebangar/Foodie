@@ -1203,9 +1203,22 @@ export const useDeliveryNotifications = () => {
       if (!orderData) return;
       const mapped = mapOrderLocations(orderData);
       if (mapped) {
+        // Admin assigned this order. It joins the Accepted queue below the current trip;
+        // the feed keeps showing the order the rider is already on.
+        const alreadyQueued = isOrderInAcceptedQueue(mapped);
+        const hadActiveTrip = (useDeliveryStore.getState().acceptedOrders || []).length > 0;
         markOrderIdsProcessed(mapped);
         clearOrderMuteState(mapped);
         useDeliveryStore.getState().acceptOrderToQueue(mapped);
+        if (!alreadyQueued) {
+          const label = mapped.orderId || mapped.order_id || '';
+          toast.success(
+            hadActiveTrip
+              ? `New order ${label ? `#${label} ` : ''}assigned to you. Check Orders > Accepted.`
+              : `New order ${label ? `#${label} ` : ''}assigned to you.`,
+            { id: `admin-assigned-${resolveOrderKey(mapped) || label}`, duration: 5000 },
+          );
+        }
         stopAlertLoop();
         activeOrderRef.current = null;
         setNewOrder(null);
@@ -1270,7 +1283,12 @@ export const useDeliveryNotifications = () => {
         setClaimedOrderId(claimedId);
       }
 
-      if (showToast && !isSelf) {
+      // Admin reassign: the previous rider gets its own "assigned to another rider" message.
+      const wasMine =
+        Boolean(deliveryPartnerId) &&
+        String(data?.previousPartnerId || '') === String(deliveryPartnerId);
+
+      if (showToast && !isSelf && !wasMine) {
         toast.info('This request accepted by another rider', {
           id: `order-claimed-${claimedId || 'unknown'}`,
           duration: 4000,
@@ -1295,6 +1313,15 @@ export const useDeliveryNotifications = () => {
       activeOrderRef.current = null;
       setNewOrder(null);
     };
+
+    // Admin moved one of this rider's accepted orders to another rider.
+    socketRef.current.on('order_unassigned_by_admin', (data) => {
+      debugLog('Order unassigned by admin:', data);
+      setOrderStatusUpdate({
+        ...(data || {}),
+        status: 'reassigned',
+      });
+    });
 
     socketRef.current.on('order_reassigned_elsewhere', (data) => {
       debugLog('?? Order reassigned to another partner:', data);
