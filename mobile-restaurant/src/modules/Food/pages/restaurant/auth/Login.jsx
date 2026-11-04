@@ -399,7 +399,6 @@ export default function RestaurantLogin() {
         navigate("/food/restaurant/otp", { state: { initialBlockMins: totalMins } })
         return
       }
-      setRoleConfirm(null)
       toast.error(msg)
     } finally {
       setLoading(false)
@@ -446,7 +445,7 @@ export default function RestaurantLogin() {
       const data = response?.data?.data || response?.data
 
       // Lets the "under review" screen log in by itself once admin approves.
-      if (data?.pendingTicket) setPendingTicket("restaurant", data.pendingTicket)
+      if (data?.pendingToken || data?.pendingTicket) setPendingTicket("restaurant", data.pendingToken || data.pendingTicket)
       else if (data?.accessToken) clearPendingTicket("restaurant")
 
       if (data.deletedAccountFound) {
@@ -757,9 +756,7 @@ export default function RestaurantLogin() {
             <View style={styles.subtitleWrap}>
               {showLoginStep ? (
                 <Text style={styles.subtitle}>
-                  {isStoreLogin
-                    ? "Enter your registered mobile number to manage your store"
-                    : "Enter your registered mobile number to manage your restaurant"}
+                  Enter your registered mobile number to manage your restaurant
                 </Text>
               ) : (
                 <View style={styles.sentRow}>

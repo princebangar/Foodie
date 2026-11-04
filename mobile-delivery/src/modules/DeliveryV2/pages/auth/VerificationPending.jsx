@@ -96,8 +96,8 @@ export default function VerificationPending() {
       if (!ticket || AppState.currentState !== "active") return
       try {
         const res = await apiClient.post(
-          "/food/auth/delivery/pending-status",
-          { pendingTicket: ticket },
+          "/food/auth/pending-approval/status",
+          { pendingToken: ticket },
           { contextModule: "delivery" },
         )
         const data = res?.data?.data || {}

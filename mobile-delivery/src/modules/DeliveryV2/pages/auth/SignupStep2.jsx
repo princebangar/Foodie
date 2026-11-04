@@ -14,6 +14,7 @@ import {
   showUserFacingApiError,
 } from "@/shared/utils/apiError"
 import { prepareUploadFile } from "@/shared/utils/imageCompressor"
+import { setPendingTicket } from "@food/utils/auth"
 import useDeliveryOnboardingExitGuard from "../../hooks/useDeliveryOnboardingExitGuard"
 import {
   DELIVERY_SIGNUP_DOC_TYPES,
@@ -298,6 +299,9 @@ export default function SignupStep2() {
         if (shouldRegister) {
           sessionStorage.removeItem("deliveryNeedsRegistration")
           const phone = String(details.phone || "").replace(/\D/g, "").slice(-10)
+          // Lets the "under review" screen log in by itself once admin approves (like the web).
+          const registeredPendingToken = response?.data?.data?.pendingToken
+          if (registeredPendingToken) setPendingTicket("delivery", registeredPendingToken)
           finalizeDeliveryPendingSubmission(navigate, phone, { fcmToken, platform })
         } else {
           toast.success("Profile submitted. Waiting for admin approval.")

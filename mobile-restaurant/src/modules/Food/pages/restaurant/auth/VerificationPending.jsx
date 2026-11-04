@@ -243,8 +243,8 @@ export default function VerificationPending() {
       if (!ticket) return
       try {
         const res = await apiClient.post(
-          "/food/auth/restaurant/pending-status",
-          { pendingTicket: ticket },
+          "/food/auth/pending-approval/status",
+          { pendingToken: ticket },
           { contextModule: "restaurant" },
         )
         const data = res?.data?.data || {}

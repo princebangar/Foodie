@@ -425,7 +425,7 @@ export default function DeliverySignIn() {
       const data = response?.data?.data || response?.data || {}
 
       // Lets the "under review" screen log in by itself once admin approves.
-      if (data?.pendingTicket) setPendingTicket("delivery", data.pendingTicket)
+      if (data?.pendingToken || data?.pendingTicket) setPendingTicket("delivery", data.pendingToken || data.pendingTicket)
       else if (data?.accessToken) clearPendingTicket("delivery")
 
       if (data?.deletedAccountFound) {
