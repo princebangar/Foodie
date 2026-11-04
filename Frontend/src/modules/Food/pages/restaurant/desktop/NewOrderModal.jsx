@@ -49,8 +49,13 @@ export default function NewOrderModal({ order, onDone }) {
         expired.current = true
         stopSound?.()
         restaurantAPI
-          .rejectOrder(actionId(order), "No response from restaurant (Auto-rejected)")
-          .then(() => toast.info("Order auto-rejected due to no response"))
+          .rejectOrder(actionId(order), "No response from restaurant (Auto-rejected)", { onlyIfPending: true })
+          .then((res) => {
+            // Already accepted (e.g. from the phone) - backend kept it, nothing was rejected.
+            const saved = String(res?.data?.data?.order?.orderStatus || "")
+            if (saved && !saved.startsWith("cancelled")) return
+            toast.info("Order auto-rejected due to no response")
+          })
           .catch(() => {})
           .finally(() => onDone(order))
       }
@@ -87,8 +92,10 @@ export default function NewOrderModal({ order, onDone }) {
     if (!reason.trim()) return toast.error("Please enter a reason")
     setBusy(true)
     try {
-      await restaurantAPI.rejectOrder(id, reason.trim())
-      toast.success(`Order #${n.orderId} rejected`)
+      const res = await restaurantAPI.rejectOrder(id, reason.trim(), { onlyIfPending: true })
+      const saved = String(res?.data?.data?.order?.orderStatus || "")
+      if (saved && !saved.startsWith("cancelled")) toast.info("Order was already accepted, so it was not rejected")
+      else toast.success(`Order #${n.orderId} rejected`)
       onDone(order)
     } catch (e) {
       toast.error(e?.response?.data?.message || "Could not reject the order")

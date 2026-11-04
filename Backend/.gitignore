@@ -20,7 +20,7 @@ pids
 *.pid.lock
 
 # local uploads (migrated from Cloudinary — not tracked in git)
-uploads/
+/uploads/
 
 # IDE - VSCode
 .vscode/*

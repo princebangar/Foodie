@@ -1543,7 +1543,9 @@ export const restaurantAPI = {
         { contextModule: "restaurant" },
       )
       .then((res) => {
-        optimisticallyUpdateRestaurantOrderStatus(orderId, outgoing.orderStatus || outgoing.status || "cancelled_by_restaurant");
+        // Prefer the status the server actually saved (a guarded reject may be a no-op).
+        const savedStatus = res?.data?.data?.order?.orderStatus;
+        optimisticallyUpdateRestaurantOrderStatus(orderId, savedStatus || outgoing.orderStatus || outgoing.status || "cancelled_by_restaurant");
         return res;
       });
   },
@@ -1587,10 +1589,12 @@ export const restaurantAPI = {
    * Reject/cancel order by restaurant.
    * Backend orderStatus enum: cancelled_by_restaurant.
    */
-  rejectOrder: (orderId, reason = "") =>
+  rejectOrder: (orderId, reason = "", { onlyIfPending = false } = {}) =>
     restaurantAPI.updateOrderStatus(orderId, {
       orderStatus: "cancelled_by_restaurant",
       note: reason,
+      // New-order popup rejects: backend skips the cancel if the order was already accepted.
+      ...(onlyIfPending ? { onlyIfPending: true } : {}),
     }),
   /** Mark order ready (restaurant handoff). */
   markOrderReady: (orderId) =>
