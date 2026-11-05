@@ -88,7 +88,6 @@ export const updateExploreIcon = async (id, payload) => {
 
     if (payload?.file?.buffer) {
         try {
-            await deleteStoredAsset(doc.iconUrl || doc.publicId);
             const { secure_url, public_id } = await uploadIcon(payload.file.buffer);
             updates.iconUrl = secure_url;
             updates.publicId = public_id;
@@ -118,6 +117,7 @@ export const updateExploreIcon = async (id, payload) => {
     }
 
     const updated = await FoodExploreIcon.findByIdAndUpdate(id, updates, { new: true }).lean();
+    if (updates.iconUrl) await deleteStoredAsset(doc.iconUrl || doc.publicId);
     return updated;
 };
 

@@ -5,6 +5,7 @@ import { DeliveryBonusTransaction } from '../../admin/models/deliveryBonusTransa
 import { FoodEarningAddon } from '../../admin/models/earningAddon.model.js';
 import { FoodOrder } from '../../orders/models/order.model.js';
 import { uploadImageBuffer } from '../../../../services/storage.service.js';
+import { releaseStoredAssets } from '../../../../services/assetCleanup.service.js';
 import { ValidationError } from '../../../../core/auth/errors.js';
 import { getDeliveryCashLimitSettings } from '../../admin/services/admin.service.js';
 import { logger } from '../../../../utils/logger.js';
@@ -79,6 +80,13 @@ const clearPartnerForReRegistration = async (existing) => {
 
     if (existing.status === 'rejected') {
         await FoodDeliveryPartner.deleteOne({ _id: existing._id });
+        void releaseStoredAssets([
+            existing.profilePhoto,
+            existing.aadharPhoto,
+            existing.panPhoto,
+            existing.drivingLicensePhoto,
+            existing.upiQrCode
+        ]);
         return;
     }
 
@@ -284,11 +292,13 @@ export const updateDeliveryPartnerProfile = async (userId, payload, files) => {
 
     let updatedDocsRequiringReapproval = false;
 
+    const previousPhoto = partner.profilePhoto;
     if (files?.profilePhoto?.[0]) {
         partner.profilePhoto = await uploadImageBuffer(files.profilePhoto[0].buffer, 'food/delivery/profile');
     }
 
     await partner.save();
+    void releaseStoredAssets(previousPhoto, partner.profilePhoto);
     return {
         partner: partner.toObject(),
         requiresReapproval: false
@@ -309,11 +319,13 @@ export const updateDeliveryPartnerDetails = async (userId, payload) => {
         if (vehicle.model !== undefined) partner.vehicleName = String(vehicle.model || '').trim();
     }
 
+    const previousPhoto = partner.profilePhoto;
     if (payload?.profilePhoto !== undefined) {
         partner.profilePhoto = payload.profilePhoto ? String(payload.profilePhoto).trim() : '';
     }
 
     await partner.save();
+    void releaseStoredAssets(previousPhoto, partner.profilePhoto);
     return partner.toObject();
 };
 
@@ -335,8 +347,10 @@ export const updateDeliveryPartnerProfilePhotoBase64 = async (userId, payload) =
         throw new ValidationError('Image too large (max 8MB)');
     }
     // uploadImageBuffer expects raw bytes; mimeType is ignored by current implementation, but buffer is valid.
+    const previousPhoto = partner.profilePhoto;
     partner.profilePhoto = await uploadImageBuffer(buffer, 'food/delivery/profile');
     await partner.save();
+    void releaseStoredAssets(previousPhoto, partner.profilePhoto);
     return partner.toObject();
 };
 
@@ -378,11 +392,13 @@ export const updateDeliveryPartnerBankDetails = async (userId, payload, files) =
         partner.panNumber = panDetails.number ? String(panDetails.number).trim().toUpperCase() : '';
     }
 
+    const previousQr = partner.upiQrCode;
     if (files?.upiQrCode?.[0]) {
         partner.upiQrCode = await uploadImageBuffer(files.upiQrCode[0].buffer, 'food/delivery/upi');
     }
 
     await partner.save();
+    void releaseStoredAssets(previousQr, partner.upiQrCode);
     return partner.toObject();
 };
 

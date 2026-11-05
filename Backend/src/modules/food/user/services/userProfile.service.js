@@ -1,6 +1,7 @@
 import { FoodUser } from '../../../../core/users/user.model.js';
 import { AuthError, ValidationError } from '../../../../core/auth/errors.js';
 import { uploadImageBuffer } from '../../../../services/storage.service.js';
+import { releaseStoredAssets } from '../../../../services/assetCleanup.service.js';
 
 const parseIsoDateOrNull = (value) => {
     if (value === undefined) return undefined;
@@ -34,6 +35,8 @@ export const updateCurrentUserProfile = async (userId, body) => {
         }
     }
 
+    const previousImage = user.profileImage;
+
     if (body.name !== undefined) user.name = String(body.name || '').trim();
     if (body.email !== undefined) user.email = String(body.email || '').trim().toLowerCase();
     if (body.profileImage !== undefined) user.profileImage = String(body.profileImage || '').trim();
@@ -45,6 +48,7 @@ export const updateCurrentUserProfile = async (userId, body) => {
     if (ann !== undefined) user.anniversary = ann;
 
     await user.save();
+    void releaseStoredAssets(previousImage, user.profileImage);
     return { user: user.toObject() };
 };
 
@@ -55,12 +59,11 @@ export const uploadCurrentUserProfileImage = async (userId, file) => {
     const user = await FoodUser.findById(userId);
     if (!user) throw new AuthError('Profile not found');
 
-    const url = await uploadImageBuffer(file.buffer, 'food/users/profile', {
-        maxWidth: 1024,
-        replaceUrl: user.profileImage,
-    });
+    const previousImage = user.profileImage;
+    const url = await uploadImageBuffer(file.buffer, 'food/users/profile', { maxWidth: 1024 });
     user.profileImage = String(url || '').trim();
     await user.save();
+    void releaseStoredAssets(previousImage, user.profileImage);
     return { profileImage: user.profileImage, user: user.toObject() };
 };
 

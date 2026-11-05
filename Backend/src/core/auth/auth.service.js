@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import ms from "ms";
 import { FoodUser } from "../users/user.model.js";
+import { releaseStoredAssets } from "../../services/assetCleanup.service.js";
 import { FoodAdmin } from "../admin/admin.model.js";
 import { AdminResetOtp } from "../admin/adminResetOtp.model.js";
 import { FoodRestaurant } from "../../modules/food/restaurant/models/restaurant.model.js";
@@ -1027,6 +1028,7 @@ export const updateAdminProfile = async (userId, body) => {
     admin.email = normalizedEmail;
   }
   if (body.phone !== undefined) admin.phone = String(body.phone || "").trim();
+  const previousImage = admin.profileImage;
   if (body.profileImage !== undefined)
     admin.profileImage = String(body.profileImage || "").trim();
   // Normalize servicesAccess so legacy values (e.g. 'zomato') don't fail schema validation on save
@@ -1039,6 +1041,7 @@ export const updateAdminProfile = async (userId, body) => {
     admin.servicesAccess = ["food"];
   }
   await admin.save();
+  void releaseStoredAssets(previousImage, admin.profileImage);
   const profile = admin.toObject();
   delete profile.password;
   return { user: profile };

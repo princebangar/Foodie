@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { ValidationError } from '../../../../core/auth/errors.js';
 import { FoodItem } from '../../admin/models/food.model.js';
+import { releaseStoredAssets } from '../../../../services/assetCleanup.service.js';
 import { FoodCategory } from '../../admin/models/category.model.js';
 import { FoodRestaurant } from '../models/restaurant.model.js';
 import {
@@ -357,6 +358,11 @@ export async function updateRestaurantFood(restaurantId, foodId, body = {}) {
     ).lean();
 
     if (updated && shouldResubmitForApproval) {
+        // Rejection keeps every image. Resubmitting overwrites oldData, so the earlier copy is no longer needed.
+        void releaseStoredAssets([existing.image, existing.oldData?.image], updated.image);
+    }
+
+    if (updated && shouldResubmitForApproval) {
         try {
             const { notifyAdminsSafely } = await import('../../../../core/notifications/firebase.service.js');
             void notifyAdminsSafely({
@@ -384,5 +390,6 @@ export async function deleteRestaurantFood(restaurantId, foodId) {
         _id: foodId,
         restaurantId: new mongoose.Types.ObjectId(String(restaurantId))
     }).lean();
+    if (food) void releaseStoredAssets([food.image, food.oldData?.image]);
     return food;
 }

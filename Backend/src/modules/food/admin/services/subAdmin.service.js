@@ -1,4 +1,5 @@
 import { FoodAdmin } from '../../../../core/admin/admin.model.js';
+import { releaseStoredAssets } from '../../../../services/assetCleanup.service.js';
 import { FoodRefreshToken } from '../../../../core/refreshTokens/refreshToken.model.js';
 import { ValidationError, ForbiddenError } from '../../../../core/auth/errors.js';
 import {
@@ -176,6 +177,7 @@ export async function deleteSubAdmin(id) {
 
   await FoodRefreshToken.deleteMany({ userId: doc._id });
   await FoodAdmin.deleteOne({ _id: doc._id });
+  void releaseStoredAssets(doc.profileImage);
   return sanitizeAdmin(doc);
 }
 

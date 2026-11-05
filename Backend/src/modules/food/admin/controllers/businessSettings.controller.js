@@ -1,6 +1,7 @@
 import { FoodBusinessSettings } from '../models/businessSettings.model.js';
 import { sendResponse } from '../../../../utils/response.js';
 import { storeImageBuffer } from '../../../../services/storage.service.js';
+import { releaseStoredAssets } from '../../../../services/assetCleanup.service.js';
 
 export async function getBusinessSettings(req, res, next) {
     try {
@@ -83,6 +84,9 @@ export async function updateBusinessSettings(req, res, next) {
         if (pincode !== undefined) settings.pincode = s_pincode;
         if (region !== undefined) settings.region = String(region || 'India').trim() || 'India';
 
+        const previousLogo = settings.logo?.url;
+        const previousFavicon = settings.favicon?.url;
+
         // Handle file uploads
         if (req.files) {
             if (req.files.logo) {
@@ -112,6 +116,8 @@ export async function updateBusinessSettings(req, res, next) {
         }
 
         await settings.save();
+        void releaseStoredAssets(previousLogo, settings.logo?.url);
+        void releaseStoredAssets(previousFavicon, settings.favicon?.url);
         return sendResponse(res, 200, 'Business settings updated successfully', settings);
     } catch (error) {
         next(error);

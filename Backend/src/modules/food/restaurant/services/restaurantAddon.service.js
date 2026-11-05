@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { releaseStoredAssets } from '../../../../services/assetCleanup.service.js';
 import { ValidationError } from '../../../../core/auth/errors.js';
 import { FoodAddon } from '../models/foodAddon.model.js';
 
@@ -200,11 +201,21 @@ export async function updateRestaurantAddon(restaurantId, addonId, updateDto) {
         return existing ? normalizeAddonDoc(existing) : null;
     }
 
+    const previous = await FoodAddon.findOne({ _id, restaurantId: rid, isDeleted: { $ne: true } })
+        .select('draft.image draft.images')
+        .lean();
     const updated = await FoodAddon.findOneAndUpdate(
         { _id, restaurantId: rid, isDeleted: { $ne: true } },
         { $set: set },
         { new: true }
     ).lean();
+    if (updated && previous) {
+        // A published copy that still uses the old image keeps the file alive until approval.
+        void releaseStoredAssets(
+            [previous.draft?.image, previous.draft?.images],
+            [updated.draft?.image, updated.draft?.images]
+        );
+    }
     return updated ? normalizeAddonDoc(updated) : null;
 }
 
@@ -217,11 +228,31 @@ export async function deleteRestaurantAddon(restaurantId, addonId) {
     }
     const rid = new mongoose.Types.ObjectId(String(restaurantId));
     const _id = new mongoose.Types.ObjectId(String(addonId));
+    // Soft delete keeps the record for audit, but its image files go, so the URLs go too.
+    const current = await FoodAddon.findOne({ _id, restaurantId: rid, isDeleted: { $ne: true } })
+        .select('draft.image draft.images published')
+        .lean();
+    if (!current) return null;
     const updated = await FoodAddon.findOneAndUpdate(
         { _id, restaurantId: rid, isDeleted: { $ne: true } },
-        { $set: { isDeleted: true } },
+        {
+            $set: {
+                isDeleted: true,
+                'draft.image': '',
+                'draft.images': [],
+                ...(current.published ? { 'published.image': '', 'published.images': [] } : {})
+            }
+        },
         { new: true }
     ).lean();
+    if (updated) {
+        void releaseStoredAssets([
+            current.draft?.image,
+            current.draft?.images,
+            current.published?.image,
+            current.published?.images
+        ]);
+    }
     return updated ? { id: updated._id } : null;
 }
 

@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { releaseStoredAssets } from '../../../../services/assetCleanup.service.js';
 import { ValidationError } from '../../../../core/auth/errors.js';
 import { FoodItem } from '../models/food.model.js';
 import { FoodAddon } from '../../restaurant/models/foodAddon.model.js';
@@ -122,6 +123,8 @@ export async function approveFoodItem(id) {
         { $set: { approvalStatus: 'approved', approvedAt: new Date(), rejectedAt: null, rejectionReason: '' } },
         { new: true }
     ).lean();
+    // The old image was kept only for the admin's before/after comparison.
+    if (updated) void releaseStoredAssets(updated.oldData?.image, updated.image);
     if (updated?.restaurantId) {
         // Single DB update; makes user-facing menu reflect approval immediately.
         await syncMenuItemApprovalStatus(updated.restaurantId, updated._id, 'approved', '');

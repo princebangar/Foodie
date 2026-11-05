@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { ValidationError } from '../../../../core/auth/errors.js';
 import { FoodCategory } from '../../admin/models/category.model.js';
+import { releaseStoredAssets } from '../../../../services/assetCleanup.service.js';
 import { FoodItem } from '../../admin/models/food.model.js';
 import { FoodRestaurant } from '../models/restaurant.model.js';
 import {
@@ -338,6 +339,7 @@ export async function updateRestaurantCategory(restaurantId, id, body = {}) {
         if (name.length > 200) throw new ValidationError('Category name is too long');
         doc.name = name;
     }
+    const previousImage = doc.image;
     if (body.image !== undefined) doc.image = String(body.image || '').trim();
     if (body.type !== undefined) doc.type = String(body.type || '').trim();
     if (body.isActive !== undefined) doc.isActive = body.isActive !== false;
@@ -364,6 +366,7 @@ export async function updateRestaurantCategory(restaurantId, id, body = {}) {
     doc.rejectedAt = undefined;
 
     await doc.save();
+    void releaseStoredAssets(previousImage, doc.image);
     return doc.toObject();
 }
 
@@ -382,5 +385,6 @@ export async function deleteRestaurantCategory(restaurantId, id) {
     }
 
     const deleted = await FoodCategory.findOneAndDelete({ _id: id, restaurantId: context.restaurantId }).lean();
+    if (deleted) void releaseStoredAssets(deleted.image);
     return deleted ? { id } : null;
 }

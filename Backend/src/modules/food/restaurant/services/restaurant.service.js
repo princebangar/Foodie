@@ -1,5 +1,6 @@
 import { FoodRestaurant } from '../models/restaurant.model.js';
 import { uploadImageBuffer } from '../../../../services/storage.service.js';
+import { releaseStoredAssets } from '../../../../services/assetCleanup.service.js';
 import { ValidationError } from '../../../../core/auth/errors.js';
 import mongoose from 'mongoose';
 import { FoodZone } from '../../admin/models/zone.model.js';
@@ -847,7 +848,7 @@ export const updateRestaurantProfile = async (restaurantId, body = {}) => {
     }
 
     const currentRestaurant = await FoodRestaurant.findById(restaurantId)
-        .select('restaurantName restaurantNameNormalized ownerPhone ownerPhoneDigits ownerPhoneLast10 primaryContactNumber status')
+        .select('restaurantName restaurantNameNormalized ownerPhone ownerPhoneDigits ownerPhoneLast10 primaryContactNumber status profileImage coverImages menuImages panImage gstImage fssaiImage upiQrImage')
         .lean();
 
     if (!currentRestaurant) {
@@ -1262,6 +1263,12 @@ export const updateRestaurantProfile = async (restaurantId, body = {}) => {
             }
         ).lean();
 
+        for (const field of ['profileImage', 'coverImages', 'menuImages', 'panImage', 'gstImage', 'fssaiImage', 'upiQrImage']) {
+            if (update[field] !== undefined) {
+                void releaseStoredAssets(currentRestaurant[field], update[field]);
+            }
+        }
+
         if (sendToReview && currentRestaurant.status !== 'pending') {
             const restaurantNameForNotification =
                 update.restaurantName || currentRestaurant.restaurantName || doc?.restaurantName;
@@ -1282,7 +1289,7 @@ export const uploadRestaurantProfileImage = async (restaurantId, file) => {
     if (!file?.buffer) throw new ValidationError('Image file is required');
 
     const currentRestaurant = await FoodRestaurant.findById(restaurantId)
-        .select('restaurantName status')
+        .select('restaurantName status profileImage')
         .lean();
     if (!currentRestaurant) throw new ValidationError('Restaurant not found');
 
@@ -1305,6 +1312,8 @@ export const uploadRestaurantProfileImage = async (restaurantId, file) => {
     ).lean();
 
     if (!doc) throw new ValidationError('Restaurant not found');
+
+    void releaseStoredAssets(currentRestaurant.profileImage, url);
 
     if (sendToReview && currentRestaurant.status !== 'pending') {
         void notifyAdminsAboutRestaurantProfileReview(restaurantId, currentRestaurant.restaurantName || doc.restaurantName);

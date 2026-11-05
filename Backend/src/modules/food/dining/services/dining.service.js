@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { releaseStoredAssets } from '../../../../services/assetCleanup.service.js';
 import { ValidationError } from '../../../../core/auth/errors.js';
 import { FoodRestaurant } from '../../restaurant/models/restaurant.model.js';
 import { logger } from '../../../../utils/logger.js';
@@ -224,6 +225,7 @@ export async function updateDiningCategory(id, body = {}) {
         }
         doc.slug = nextSlug;
     }
+    const previousImage = doc.imageUrl;
     if (body.imageUrl !== undefined) {
         doc.imageUrl = String(body.imageUrl || '').trim();
     }
@@ -235,6 +237,7 @@ export async function updateDiningCategory(id, body = {}) {
     }
 
     await doc.save();
+    void releaseStoredAssets(previousImage, doc.imageUrl);
 
     const linkedDiningDocs = await FoodDiningRestaurant.find({ categoryIds: doc._id }).select('_id restaurantId').lean();
     await Promise.all(linkedDiningDocs.map(async (item) => {
@@ -249,6 +252,7 @@ export async function deleteDiningCategory(id) {
 
     const category = await FoodDiningCategory.findByIdAndDelete(id).lean();
     if (!category) return null;
+    void releaseStoredAssets(category.imageUrl);
 
     const categoryId = new mongoose.Types.ObjectId(id);
     const diningDocs = await FoodDiningRestaurant.find({ categoryIds: categoryId });

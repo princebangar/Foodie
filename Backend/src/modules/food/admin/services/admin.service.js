@@ -1,6 +1,7 @@
 ﻿import mongoose from 'mongoose';
 import { ValidationError, NotFoundError } from '../../../../core/auth/errors.js';
 import { logger } from '../../../../utils/logger.js';
+import { releaseStoredAssets } from '../../../../services/assetCleanup.service.js';
 import { FoodRestaurant } from '../../restaurant/models/restaurant.model.js';
 import { FoodDeliveryPartner } from '../../delivery/models/deliveryPartner.model.js';
 import { DeliverySupportTicket } from '../../delivery/models/supportTicket.model.js';
@@ -3242,6 +3243,8 @@ export async function updateRestaurantById(id, body = {}) {
 
     // Images
     const getUrl = (v) => (v && typeof v === 'object' ? v.url : v);
+    const restaurantImages = () => [doc.profileImage, doc.panImage, doc.gstImage, doc.fssaiImage, [...(doc.menuImages || [])]];
+    const previousImages = restaurantImages();
     if (body.profileImage !== undefined) doc.profileImage = toStr(getUrl(body.profileImage)) || undefined;
     if (body.panImage !== undefined) doc.panImage = toStr(getUrl(body.panImage)) || undefined;
     if (body.gstImage !== undefined) doc.gstImage = toStr(getUrl(body.gstImage)) || undefined;
@@ -3256,6 +3259,7 @@ export async function updateRestaurantById(id, body = {}) {
     }
 
     await doc.save();
+    void releaseStoredAssets(previousImages, restaurantImages());
     return FoodRestaurant.findById(id).select('-__v').populate('zoneId', 'name zoneName serviceLocation isActive').lean();
 }
 
@@ -3558,6 +3562,7 @@ export async function updateCategory(id, body) {
         }
     }
 
+    const previousImage = doc.image;
     if (body.name !== undefined) doc.name = String(body.name || '').trim();
     if (body.image !== undefined) doc.image = String(body.image || '').trim();
     if (body.type !== undefined) doc.type = String(body.type || '').trim();
@@ -3579,6 +3584,7 @@ export async function updateCategory(id, body) {
         doc.createdByRestaurantId = doc.restaurantId;
     }
     await doc.save();
+    void releaseStoredAssets(previousImage, doc.image);
     return doc.toObject();
 }
 
@@ -3589,6 +3595,7 @@ export async function deleteCategory(id) {
         throw new ValidationError('Cannot delete category while it has items');
     }
     const deleted = await FoodCategory.findByIdAndDelete(id).lean();
+    if (deleted) void releaseStoredAssets(deleted.image);
     return deleted ? { id } : null;
 }
 
@@ -3680,6 +3687,14 @@ export async function updateRestaurantAddonAdmin(addonId, body) {
     const addon = await FoodAddon.findOne({ _id, isDeleted: { $ne: true } });
     if (!addon) return null;
 
+    const addonImages = () => [
+        addon.draft?.image,
+        [...(addon.draft?.images || [])],
+        addon.published?.image,
+        [...(addon.published?.images || [])]
+    ];
+    const previousImages = addonImages();
+
     const updatePayload = {};
     if (body.name !== undefined) updatePayload.name = String(body.name || '').trim();
     if (body.description !== undefined) updatePayload.description = String(body.description || '').trim();
@@ -3716,12 +3731,15 @@ export async function updateRestaurantAddonAdmin(addonId, body) {
     }
 
     await addon.save();
+    void releaseStoredAssets(previousImages, addonImages());
     return addon.toObject();
 }
 
 export async function approveRestaurantAddon(addonId) {
     if (!addonId || !mongoose.Types.ObjectId.isValid(String(addonId))) return null;
     const _id = new mongoose.Types.ObjectId(String(addonId));
+
+    const previous = await FoodAddon.findById(_id).select('published.image published.images').lean();
 
     // Use update pipeline to copy draft -> published atomically.
     const updated = await FoodAddon.findOneAndUpdate(
@@ -3739,6 +3757,13 @@ export async function approveRestaurantAddon(addonId) {
         ],
         { new: true }
     ).lean();
+
+    if (updated && previous) {
+        void releaseStoredAssets(
+            [previous.published?.image, previous.published?.images],
+            [updated.published?.image, updated.published?.images]
+        );
+    }
 
     if (updated?.restaurantId) {
         try {
@@ -4044,6 +4069,7 @@ export async function updateFood(id, body) {
             ? Number(body.otherPlatformGst)
             : null;
     }
+    const previousImage = doc.image;
     if (body.image !== undefined) {
         const image = String(body.image || '').trim();
         doc.image = image;
@@ -4066,12 +4092,14 @@ export async function updateFood(id, body) {
         doc.categoryName = categoryName;
     }
     await doc.save();
+    void releaseStoredAssets(previousImage, doc.image);
     return doc.toObject();
 }
 
 export async function deleteFood(id) {
     if (!id || !mongoose.Types.ObjectId.isValid(id)) return null;
     const deleted = await FoodItem.findByIdAndDelete(id).lean();
+    if (deleted) void releaseStoredAssets([deleted.image, deleted.oldData?.image]);
     return deleted ? { id } : null;
 }
 
@@ -4478,6 +4506,12 @@ export async function deleteRestaurant(id) {
     const restaurant = await FoodRestaurant.findById(restaurantId).lean();
     if (!restaurant) return null;
 
+    const [restaurantFoods, restaurantAddons, restaurantCategories] = await Promise.all([
+        FoodItem.find({ restaurantId }).select('image oldData').lean(),
+        FoodAddon.find({ restaurantId }).select('draft.image draft.images published.image published.images').lean(),
+        FoodCategory.find({ restaurantId }).select('image').lean()
+    ]);
+
     // Cascading deletion
     await Promise.all([
         // Delete all food items
@@ -4496,6 +4530,19 @@ export async function deleteRestaurant(id) {
         FoodOffer.deleteMany({ restaurantId, restaurantScope: 'selected' }),
         // Finally delete the restaurant
         FoodRestaurant.findByIdAndDelete(restaurantId)
+    ]);
+
+    void releaseStoredAssets([
+        restaurant.profileImage,
+        restaurant.coverImages,
+        restaurant.menuImages,
+        restaurant.panImage,
+        restaurant.gstImage,
+        restaurant.fssaiImage,
+        restaurant.upiQrImage,
+        restaurantFoods.map((f) => [f.image, f.oldData?.image]),
+        restaurantAddons.map((a) => [a.draft?.image, a.draft?.images, a.published?.image, a.published?.images]),
+        restaurantCategories.map((c) => c.image)
     ]);
 
     return { id: restaurantId };

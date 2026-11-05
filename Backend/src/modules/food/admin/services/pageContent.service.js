@@ -1,4 +1,5 @@
 import { FoodPageContent } from '../models/pageContent.model.js';
+import { releaseStoredAssets } from '../../../../services/assetCleanup.service.js';
 import { ValidationError } from '../../../../core/auth/errors.js';
 
 const normalizeKey = (key) => String(key || '').trim().toLowerCase();
@@ -99,6 +100,8 @@ export const upsertAboutPage = async (payload, updatedBy) => {
         order: Number.isFinite(Number(f?.order)) ? Number(f.order) : idx
     }));
 
+    const previous = await FoodPageContent.findOne({ key: 'about' }).select('about.logo').lean();
+
     const doc = await FoodPageContent.findOneAndUpdate(
         { key: 'about' },
         {
@@ -112,6 +115,7 @@ export const upsertAboutPage = async (payload, updatedBy) => {
         },
         { upsert: true, new: true }
     ).lean();
+    void releaseStoredAssets(previous?.about?.logo, logo);
 
     return { key: 'about', data: normalizeAboutForResponse(doc?.about || null) };
 };
