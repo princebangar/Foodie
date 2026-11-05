@@ -13,7 +13,7 @@
 module.exports = {
   apps: [
     {
-      name: 'foodie-v2',
+      name: 'foodie',
       script: 'server.js',
       cwd: __dirname,
       instances: 1,
