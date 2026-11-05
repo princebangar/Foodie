@@ -49,6 +49,8 @@ app.use(helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' }
 }));
 const allowedOrigins = [
+    'https://foodie.org.in',
+    'https://www.foodie.org.in',
     'https://foodie.in',
     'https://www.foodie.in',
     'https://foodieindia.cloud',
