@@ -7,6 +7,69 @@ import { config } from '../config/env.js';
 const UPLOADS_ROOT = config.uploadsRoot;
 
 /**
+ * A local/dev backend with UPLOAD_REMOTE_ORIGIN set never touches its own disk:
+ * every store and delete goes to the live server, so the file sits in the live
+ * /var/www/uploads and the stored URL is the live one. Production always uses disk.
+ */
+export const usesRemoteStore = () =>
+    Boolean(config.uploadRemoteOrigin) && config.nodeEnv !== 'production';
+
+const remoteEndpoint = () => `${config.uploadRemoteOrigin}/api/v1/uploads/internal`;
+
+const remoteError = (message) => {
+    const err = new Error(message);
+    err.statusCode = 502;
+    return err;
+};
+
+const remoteHeaders = () => {
+    if (!config.uploadInternalSecret) {
+        throw remoteError('UPLOAD_INTERNAL_SECRET is not set; cannot upload to the live server');
+    }
+    return { 'X-Upload-Secret': config.uploadInternalSecret };
+};
+
+const postRemoteFile = async (buffer, { kind, folder, originalName, maxWidth }) => {
+    const form = new FormData();
+    form.append('file', new Blob([buffer]), originalName || 'upload.bin');
+    form.append('kind', kind);
+    form.append('folder', folder || 'uploads');
+    if (maxWidth) form.append('maxWidth', String(maxWidth));
+
+    let response;
+    try {
+        response = await fetch(remoteEndpoint(), {
+            method: 'POST',
+            headers: remoteHeaders(),
+            body: form
+        });
+    } catch (err) {
+        throw remoteError(`Could not reach the live upload server: ${err.message}`);
+    }
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.success || !payload?.data?.secure_url) {
+        throw remoteError(payload?.message || `Live upload server answered ${response.status}`);
+    }
+    return payload.data;
+};
+
+const deleteRemoteAsset = async (urlOrPublicId) => {
+    try {
+        const response = await fetch(remoteEndpoint(), {
+            method: 'DELETE',
+            headers: { ...remoteHeaders(), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: String(urlOrPublicId) })
+        });
+        if (!response.ok) return false;
+        const payload = await response.json().catch(() => null);
+        return payload?.data?.deleted === true;
+    } catch (err) {
+        console.error(`Failed to delete remote upload ${urlOrPublicId}:`, err.message);
+        return false;
+    }
+};
+
+/**
  * Local disk storage — the replacement for cloudinary.service.js.
  *
  * Files live flat in UPLOADS_ROOT and nginx serves them straight off disk at
@@ -72,6 +135,15 @@ export const storeImageBuffer = async (buffer, folder = 'uploads', options = {})
         throw new Error('File buffer is required');
     }
 
+    if (usesRemoteStore()) {
+        return postRemoteFile(buffer, {
+            kind: 'image',
+            folder,
+            originalName: 'upload.img',
+            maxWidth: options.maxWidth
+        });
+    }
+
     await ensureRoot();
 
     const { buffer: data, ext, width, height } = await encodeImage(buffer, options);
@@ -97,6 +169,10 @@ export const storeImageBuffer = async (buffer, folder = 'uploads', options = {})
 export const storeFileBuffer = async (buffer, folder = 'uploads', originalName = '') => {
     if (!buffer || !buffer.length) {
         throw new Error('File buffer is required');
+    }
+
+    if (usesRemoteStore()) {
+        return postRemoteFile(buffer, { kind: 'file', folder, originalName });
     }
 
     await ensureRoot();
@@ -153,6 +229,9 @@ export const resolveStoredFilename = async (urlOrPublicId) => {
 
     if (path.extname(name)) return name;
 
+    // The files are on the live server, which resolves the extension itself.
+    if (usesRemoteStore()) return name;
+
     // Legacy public ids carry no extension; find the one file that matches.
     try {
         const entries = await fs.promises.readdir(UPLOADS_ROOT);
@@ -168,6 +247,8 @@ export const resolveStoredFilename = async (urlOrPublicId) => {
  * @returns {Promise<boolean>} true when a file was removed
  */
 export const deleteStoredAsset = async (urlOrPublicId) => {
+    if (!urlOrPublicId) return false;
+    if (usesRemoteStore()) return deleteRemoteAsset(urlOrPublicId);
     const filename = await resolveStoredFilename(urlOrPublicId);
     if (!filename) return false;
     try {

@@ -50,6 +50,7 @@ import {
     textSearchPlacesPublicController,
 } from '../controllers/geocodePublic.controller.js';
 import { getPublicEnvController } from '../controllers/publicEnv.controller.js';
+import { getPublicLoginPageImagesController } from '../controllers/loginPageImage.controller.js';
 import {
     listGourmetAdmin,
     createGourmetAdmin,
@@ -132,6 +133,7 @@ router.get('/hero-banners/dining/public', getPublicDiningBannersController);
 router.get('/explore-icons/public', getPublicExploreIconsController);
 router.get('/hero-banners/gourmet/public', getPublicGourmetController);
 router.get('/landing/settings/public', getPublicLandingSettingsController);
+router.get('/login-pages/:appType/images/public', getPublicLoginPageImagesController);
 router.get('/combo-offers/public', getPublicComboOffersController);
 router.get('/zones/detect', detectZonePublicController);
 router.get('/zones/nearby', listZonesNearbyPublicController);

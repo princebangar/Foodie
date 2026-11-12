@@ -11,6 +11,7 @@ const ALWAYS_ALLOW_PREFIXES = [
   '/v1/food/admin',
   '/v1/admin',
   '/v1/payments/webhook',
+  '/v1/food/login-pages',
   '/v1/food/auth',
   '/v1/auth',
 ];

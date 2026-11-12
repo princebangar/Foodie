@@ -88,6 +88,13 @@ export const config = {
         process.env.API_BASE_URL ||
         `http://localhost:${process.env.PORT || 5000}`
     ).replace(/\/+$/, ''),
+    // Set on a local/dev backend (e.g. https://foodie.org.in) to send every upload
+    // and delete to the live server's /api/v1/uploads/internal instead of the
+    // local disk. Ignored when NODE_ENV=production.
+    uploadRemoteOrigin: String(process.env.UPLOAD_REMOTE_ORIGIN || '').trim().replace(/\/+$/, ''),
+    // Shared secret for /api/v1/uploads/internal. Must match on both backends;
+    // the endpoint stays disabled while it is unset.
+    uploadInternalSecret: String(process.env.UPLOAD_INTERNAL_SECRET || '').trim(),
     // Keep serving /uploads from Express. Off in production once nginx owns it.
     serveUploadsFromNode: process.env.SERVE_UPLOADS_FROM_NODE
         ? process.env.SERVE_UPLOADS_FROM_NODE !== 'false'
