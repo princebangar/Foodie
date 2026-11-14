@@ -777,9 +777,27 @@ export default function UnifiedOTPFastLogin() {
                       autoFocus={index === 0}
                       value={otp[index] || ""}
                       onChange={(e) => {
-                        const val = e.target.value.replace(/\D/g, "").slice(-1)
-                        if (!val) return
+                        const digits = e.target.value.replace(/\D/g, "")
+                        if (!digits) return
                         setOtpError("")
+                        // SMS autofill ("one-time-code") and paste put the whole code in one box:
+                        // spread it over the boxes from this one on.
+                        // Typing over a filled box gives old + new digit: that's one keypress, not a paste.
+                        const retyped = digits.length === 2 && otp[index] && digits.includes(otp[index])
+                        if (digits.length > 1 && !retyped) {
+                          const prev = otp.split("")
+                          digits.split("").forEach((d, i) => {
+                            if (index + i < 4) prev[index + i] = d
+                          })
+                          const combined = prev.join("").slice(0, 4)
+                          setOtp(combined)
+                          document.getElementById(`otp-${Math.min(index + digits.length, 3)}`)?.focus()
+                          if (combined.length === 4) handleVerifyOTP(null, combined)
+                          return
+                        }
+                        const val = retyped
+                          ? (digits[0] === otp[index] ? digits[1] : digits[0])
+                          : digits
                         const newOtp = otp.split("")
                         newOtp[index] = val
                         const combined = newOtp.join("").slice(0, 4)
@@ -826,7 +844,7 @@ export default function UnifiedOTPFastLogin() {
                       ) : resendTimer > 0 ? (
                         <span className="text-[#9197A6]">Resend SMS in {resendTimer}s</span>
                       ) : (
-                        <button type="button" onClick={handleResendOTP} className="text-[#EF4F5F]">
+                        <button type="button" onClick={handleResendOTP} className="text-[#E23744]">
                           Resend SMS
                         </button>
                       )}
@@ -848,8 +866,8 @@ export default function UnifiedOTPFastLogin() {
                 <button
                   type="button"
                   onClick={handleEditNumber}
-                  className="mx-auto mt-auto shrink-0 pt-10 text-[16px] text-[#EF4F5F]"
-                  style={{ marginBottom: "calc(env(safe-area-inset-bottom, 0px) + 76px)" }}
+                  className="mx-auto mt-auto shrink-0 pt-10 text-[16px] text-[#E23744]"
+                  style={{ marginBottom: "calc(env(safe-area-inset-bottom, 0px) + 88px)" }}
                 >
                   Go back to login methods
                 </button>

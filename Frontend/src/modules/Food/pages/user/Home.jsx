@@ -137,12 +137,14 @@ let HOME_CATEGORIES_CACHE = getSessionCache(HOME_CATEGORIES_CACHE_KEY);
 
 
 // Explore More Icons
-import exploreOffers from "@food/assets/explore-icons/offers.png";
-import exploreGourmet from "@food/assets/explore-icons/gourmet.svg";
-import exploreCollection from "@food/assets/explore-icons/collection.svg";
+// Default icons; an icon uploaded in admin (Explore icons) replaces its default.
+import exploreUnder250 from "@food/assets/explore-icons/under-250.webp";
+import exploreOffers from "@food/assets/explore-icons/offers.webp";
+import exploreGourmet from "@food/assets/explore-icons/gourmet.webp";
+import exploreCollection from "@food/assets/explore-icons/collection.webp";
 
 // Bundled Explore logos — warm browser cache as soon as Home module loads
-preloadImageUrls([exploreOffers, exploreGourmet, exploreCollection]);
+preloadImageUrls([exploreUnder250, exploreOffers, exploreGourmet, exploreCollection]);
 
 const CACHED_EXPLORE_BOOT = (() => {
   try {
@@ -910,8 +912,8 @@ export default function Home({ homeMode = null, isTabActive = true }) {
         id: "under-250",
         label: "Under 250",
         // Local asset always used for first paint; remote admin icon swaps in when ready
-        image: exploreOffers,
-        fallbackImage: exploreOffers,
+        image: exploreUnder250,
+        fallbackImage: exploreUnder250,
         href: "/food/user/under-250",
       },
       {
