@@ -21,18 +21,24 @@ import {
   useLoginImageSlider,
 } from "../components/LoginImageSlider"
 
-// How far the slider stops short of the screen bottom. Always less than the
-// sheet's height, so the slider's bottom edge stays hidden behind the sheet.
-const SLIDER_BOTTOM_INSET = 236
+// Slides are 1080 x 1350 (4:5), shown full width with the sheet right below.
+const SLIDER_ASPECT = 1350 / 1080
+// Zomato's slider ends at 1348 of 2400 px (56%) of the screen. Taking the same
+// share of the page keeps the form where Zomato has it, even under a browser bar.
+const SLIDER_SCREEN_SHARE = 0.56
+// Room the form always keeps on short screens; the slider shrinks instead.
+const SHEET_MIN_HEIGHT = 236
 
+// Measured from the Zomato login screen (1080 px wide at 2.75 px per dp).
+const LOGIN_FONT = "'Lexend', 'Figtree', sans-serif"
 const FIELD_CLASS =
-  "h-12 rounded-xl border border-[#E8E8EE] bg-white transition-shadow group-focus-within:border-transparent group-focus-within:shadow-[0_2px_10px_rgba(28,28,43,0.16)] dark:border-gray-700 dark:bg-gray-900"
+  "h-12 rounded-lg border border-[#D0D4DC] bg-white shadow-[0_1px_2px_rgba(28,28,28,0.12)] dark:border-gray-700 dark:bg-gray-900"
 const PRIMARY_BUTTON_CLASS =
-  "flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#B80B3D] text-[17px] font-medium text-white transition-colors hover:bg-[#A10935] active:bg-[#90082E]"
+  "flex h-[52px] w-full items-center justify-center gap-2 rounded-lg bg-[#EF4F5F] text-[20px] font-normal text-white transition-colors active:bg-[#E23744]"
 
 function IndiaFlag() {
   return (
-    <svg viewBox="0 0 30 20" className="h-5 w-[30px] rounded-[3px]" role="img" aria-label="India">
+    <svg viewBox="0 0 30 20" preserveAspectRatio="none" className="h-[15px] w-[23px] rounded-[3px]" role="img" aria-label="India">
       <rect width="30" height="6.67" fill="#FF9933" />
       <rect y="6.67" width="30" height="6.66" fill="#FFFFFF" />
       <rect y="13.33" width="30" height="6.67" fill="#138808" />
@@ -62,6 +68,7 @@ function useKeyboardAwareViewport() {
   const [viewport, setViewport] = useState(() => ({
     height: window.innerHeight,
     baseHeight: window.innerHeight,
+    width: window.innerWidth,
     top: 0,
   }))
 
@@ -76,6 +83,7 @@ function useKeyboardAwareViewport() {
       setViewport((previous) => ({
         height,
         baseHeight: widthChanged ? height : Math.max(previous.baseHeight, height),
+        width: window.innerWidth,
         top: visual?.offsetTop ?? 0,
       }))
     }
@@ -571,23 +579,31 @@ export default function UnifiedOTPFastLogin() {
     }
   }, [step, blockTimer > 0])
 
-  const formatResendTimer = (seconds) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`
-  }
-
   const primaryColor = "#DC2626" // Rebranded Red color
+
+  // The page column is capped at 480px from md up (md:max-w-[480px] below).
+  const columnWidth = viewport.width >= 768 ? Math.min(viewport.width, 480) : viewport.width
+  // Like Zomato: with the keyboard up the form sits right above the keys and
+  // the terms line stays hidden behind them.
+  const keyboardOpen = viewport.baseHeight - viewport.height > 120
+  const sliderHeight = Math.max(
+    Math.min(
+      Math.round(columnWidth * SLIDER_ASPECT),
+      Math.round(viewport.baseHeight * SLIDER_SCREEN_SHARE),
+      viewport.baseHeight - SHEET_MIN_HEIGHT
+    ),
+    0
+  )
 
   return (
     <div
       className="fixed inset-x-0 flex justify-center overflow-hidden bg-black"
-      style={{ top: viewport.top, height: viewport.height, fontFamily: "'Figtree', sans-serif" }}
+      style={{ top: viewport.top, height: viewport.height, fontFamily: LOGIN_FONT }}
     >
       <div className="relative h-full w-full md:max-w-[480px]">
         <LoginImageSlider
           slider={slider}
-          height={Math.max(viewport.baseHeight - SLIDER_BOTTOM_INSET, 0)}
+          height={sliderHeight}
         />
 
         {/* Hidden keyboard-keeper: focused on the "Continue" tap so iOS keeps the
@@ -617,27 +633,20 @@ export default function UnifiedOTPFastLogin() {
           </button>
         )}
 
-        {step === 2 && (
-          <button
-            type="button"
-            onClick={handleEditNumber}
-            aria-label="Go back and change number"
-            style={{ top: "calc(env(safe-area-inset-top, 0px) + 14px)" }}
-            className="absolute left-3 z-10 rounded-full bg-black/75 p-2 text-white"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-        )}
-
         {/* Bottom sheet */}
         <div className="absolute inset-x-0 bottom-0 z-10 flex max-h-full flex-col">
-          <div className="pb-3">
+          <div className="pb-2.5">
             <LoginSliderDots count={slider.images.length} activeIndex={slider.index} />
           </div>
 
           <div
-            className="overflow-y-auto rounded-t-[24px] bg-white px-4 pt-6 min-[360px]:px-6 dark:bg-[#0a0a0a]"
-            style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 20px)" }}
+            className="flex flex-col overflow-y-auto bg-white px-4 pt-4 min-[360px]:px-6 dark:bg-[#0a0a0a]"
+            style={{
+              paddingBottom: keyboardOpen ? 16 : "calc(env(safe-area-inset-bottom, 0px) + 20px)",
+              // Fills the screen below the slider; with the keyboard up the sheet
+              // shrinks to its content and rides over the slider's bottom.
+              minHeight: keyboardOpen ? 0 : Math.max(viewport.height - sliderHeight, 0),
+            }}
           >
             <AnimatePresence mode="wait" initial={false}>
               {step === 1 ? (
@@ -650,16 +659,16 @@ export default function UnifiedOTPFastLogin() {
                   onSubmit={handleSendOTP}
                   noValidate
                 >
-                  <h1 className="mb-5 text-center text-[17px] font-semibold text-[#2B2D42] dark:text-white">
+                  <h1 className="mb-4 text-center text-[16px] font-medium leading-[23px] text-[#596378] dark:text-gray-300">
                     Log in or sign up
                   </h1>
 
-                  <div className="group flex gap-2 min-[360px]:gap-3">
-                    <div className={`${FIELD_CLASS} flex w-[60px] shrink-0 items-center justify-center min-[360px]:w-[72px]`}>
+                  <div className="flex gap-2.5">
+                    <div className={`${FIELD_CLASS} flex w-[66px] shrink-0 items-center justify-center`}>
                       <IndiaFlag />
                     </div>
-                    <label className={`${FIELD_CLASS} flex min-w-0 flex-1 items-center gap-2 px-3 min-[360px]:gap-2.5 min-[360px]:px-4`}>
-                      <span className="text-[16px] font-medium text-[#2B2D42] dark:text-white">+91</span>
+                    <label className={`${FIELD_CLASS} flex min-w-0 flex-1 items-center gap-1.5 px-4`}>
+                      <span className="text-[18px] font-normal text-[#1C1C1C] dark:text-white">+91</span>
                       <input
                         type="tel"
                         inputMode="numeric"
@@ -671,8 +680,8 @@ export default function UnifiedOTPFastLogin() {
                           setPhoneError("")
                         }}
                         maxLength={10}
-                        className="w-full min-w-0 bg-transparent text-[17px] font-medium tracking-[0.01em] text-[#2B2D42] outline-none placeholder:font-normal placeholder:text-[15px] placeholder:text-[#9A9CAE] min-[360px]:placeholder:text-[17px] dark:text-white"
-                        placeholder="Enter Mobile Number"
+                        className="w-full min-w-0 bg-transparent text-[18px] font-normal text-[#1C1C1C] caret-[#E23744] outline-none placeholder:text-[16px] placeholder:text-[#AFB4C0] min-[360px]:placeholder:text-[18px] dark:text-white"
+                        placeholder="Enter Phone Number"
                       />
                     </label>
                   </div>
@@ -686,142 +695,167 @@ export default function UnifiedOTPFastLogin() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className={`${PRIMARY_BUTTON_CLASS} mt-4`}
+                    className={`${PRIMARY_BUTTON_CLASS} mt-5`}
                   >
                     {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Continue"}
                   </button>
                 </motion.form>
-              ) : (
-                <motion.form
-                  key="step-2"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.15 }}
-                  onSubmit={handleVerifyOTP}
-                  noValidate
-                >
-                  <h1 className="text-center text-[17px] font-semibold text-[#2B2D42] dark:text-white">
-                    OTP Verification
-                  </h1>
-                  <p className="mt-1.5 text-center text-[14px] text-[#696B7E] dark:text-gray-400">
-                    We've sent a code to <span className="font-medium text-[#2B2D42] dark:text-white">+91 {phoneNumber}</span>
-                  </p>
-
-                  {otpError && (
-                    <motion.p
-                      initial={{ opacity: 0, y: -6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      role="alert"
-                      className="mt-3 text-center text-[14px] font-medium text-red-600 dark:text-red-500"
-                    >
-                      {otpError}
-                    </motion.p>
-                  )}
-
-                  <div className="mt-5 flex justify-center gap-3">
-                    {[0, 1, 2, 3].map((index) => (
-                      <input
-                        key={index}
-                        id={`otp-${index}`}
-                        type="tel"
-                        inputMode="numeric"
-                        aria-label={`Digit ${index + 1} of the OTP`}
-                        disabled={loading || blockTimer > 0}
-                        autoFocus={index === 0}
-                        value={otp[index] || ""}
-                        onChange={(e) => {
-                          const val = e.target.value.replace(/\D/g, "").slice(-1);
-                          if (index === 0 && val) {
-                            setOtpError("");
-                          }
-                          if (!val) return;
-                          const newOtp = otp.split("");
-                          newOtp[index] = val;
-                          const combined = newOtp.join("").slice(0, 4);
-                          setOtp(combined);
-                          if (index < 3 && val) {
-                            document.getElementById(`otp-${index + 1}`)?.focus();
-                          }
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Backspace") {
-                            if (!otp[index] && index > 0) {
-                              document.getElementById(`otp-${index - 1}`)?.focus();
-                            } else {
-                              const newOtp = otp.split("");
-                              newOtp[index] = "";
-                              setOtp(newOtp.join(""));
-                            }
-                          }
-                        }}
-                        className={`h-14 w-14 rounded-xl border border-[#E8E8EE] bg-white text-center text-[22px] font-semibold text-[#2B2D42] outline-none transition-shadow focus:border-transparent focus:shadow-[0_2px_10px_rgba(28,28,43,0.16)] dark:border-gray-700 dark:bg-gray-900 dark:text-white ${blockTimer > 0 ? "cursor-not-allowed border-red-400 bg-red-50 text-red-800 opacity-50" : ""}`}
-                      />
-                    ))}
-                  </div>
-
-                  <div className="mt-4 text-center text-[14px]">
-                    {blockTimer > 0 ? (
-                      <span className="text-[#9A9CAE]">Resend SMS</span>
-                    ) : resendTimer > 0 ? (
-                      <span className="text-[#696B7E] dark:text-gray-400">
-                        Resend SMS in <span className="font-semibold text-[#2B2D42] dark:text-white">{formatResendTimer(resendTimer)}</span>
-                      </span>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={handleResendOTP}
-                        className="font-medium text-[#2B2D42] hover:underline dark:text-white"
-                      >
-                        Didn't receive SMS? Resend SMS
-                      </button>
-                    )}
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={loading || otp.length < 4 || blockTimer > 0}
-                    className={`${PRIMARY_BUTTON_CLASS} mt-4 disabled:opacity-50`}
-                  >
-                    {loading ? (
-                      <>
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                        Verifying...
-                      </>
-                    ) : (
-                      "Verify & Continue"
-                    )}
-                  </button>
-
-                  {blockTimer > 0 && (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mx-auto mt-4 w-fit rounded-xl border border-red-100 bg-red-50 px-6 py-2.5 text-center dark:border-red-900/50 dark:bg-red-950/20">
-                      <p className="text-[11px] font-bold uppercase tracking-wider text-[#B80B3D]">
-                        Too many failed attempts
-                      </p>
-                      <p className="text-sm font-bold text-[#B80B3D]">
-                        Try again after {Math.floor((blockTimer - 1) / 60)}:{String((blockTimer - 1) % 60).padStart(2, '0')}
-                      </p>
-                    </motion.div>
-                  )}
-                </motion.form>
-              )}
+              ) : null}
             </AnimatePresence>
 
             {/* Footer Info - only on login step, not OTP */}
-            {step === 1 && (
-              <div className="mt-6 text-center">
-                <p className="text-[11px] text-gray-400/80 font-medium leading-relaxed max-w-[320px] mx-auto">
-                  By continuing, you agree to our <br />
-                  <Link to="/user/profile/terms" state={{ from: "/user/auth/login" }} className="text-gray-400 hover:text-[#B80B3D] transition-colors uppercase tracking-wider font-semibold">TERMS</Link>
-                  <span className="mx-2 text-gray-400/80 font-bold">•</span>
-                  <Link to="/user/profile/privacy" state={{ from: "/user/auth/login" }} className="text-gray-400 hover:text-[#B80B3D] transition-colors uppercase tracking-wider font-semibold">PRIVACY</Link>
-                  <span className="mx-2 text-gray-400/80 font-bold">•</span>
-                  <Link to="/user/profile/support-info" state={{ from: "/user/auth/login" }} className="text-gray-400 hover:text-[#B80B3D] transition-colors uppercase tracking-wider font-semibold">SUPPORT</Link>
+            {step === 1 && !keyboardOpen && (
+              // Pinned to the bottom of the sheet, like the Zomato terms line.
+              <div className="mt-auto pt-8 text-center text-[14px] font-normal leading-[20px] text-[#414A5D] dark:text-gray-400">
+                <p>By continuing, you agree to our</p>
+                <p className="mt-0.5 flex justify-center gap-3">
+                  {[
+                    { to: "/user/profile/terms", label: "Terms of Service" },
+                    { to: "/user/profile/privacy", label: "Privacy Policy" },
+                    { to: "/user/profile/support-info", label: "Support" },
+                  ].map(({ to, label }) => (
+                    <Link
+                      key={to}
+                      to={to}
+                      state={{ from: "/user/auth/login" }}
+                      className="border-b border-dotted border-[#9CA3AF] pb-px"
+                    >
+                      {label}
+                    </Link>
+                  ))}
                 </p>
               </div>
             )}
           </div>
         </div>
+
+        {/* OTP page: full white screen with its own header, like Zomato's. */}
+        <AnimatePresence>
+          {step === 2 && (
+            <motion.form
+              key="otp-page"
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ duration: 0.25, ease: [0.32, 0.72, 0, 1] }}
+              onSubmit={handleVerifyOTP}
+              noValidate
+              className="absolute inset-0 z-20 flex flex-col bg-white text-[#1C1C1C] dark:bg-[#0a0a0a] dark:text-white"
+              style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
+            >
+              <div className="flex h-14 shrink-0 items-center">
+                <button
+                  type="button"
+                  onClick={handleEditNumber}
+                  aria-label="Go back and change number"
+                  className="ml-2.5 rounded-full p-1.5 active:bg-gray-100 dark:active:bg-gray-800"
+                >
+                  <ArrowLeft className="h-6 w-6" strokeWidth={1.75} />
+                </button>
+                <h1 className="ml-1.5 text-[24px] font-normal leading-none">OTP Verification</h1>
+              </div>
+
+              <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3">
+                <p className="mt-6 text-center text-[16px] leading-[23px]">
+                  We have sent a verification code to
+                </p>
+                <p className="mt-1.5 text-center text-[16px] font-semibold leading-[23px]">
+                  +91-{phoneNumber}
+                </p>
+
+                <div className="mt-11 flex justify-center gap-[17px]">
+                  {[0, 1, 2, 3].map((index) => (
+                    <input
+                      key={index}
+                      id={`otp-${index}`}
+                      type="tel"
+                      inputMode="numeric"
+                      autoComplete={index === 0 ? "one-time-code" : "off"}
+                      aria-label={`Digit ${index + 1} of the OTP`}
+                      disabled={loading || blockTimer > 0}
+                      autoFocus={index === 0}
+                      value={otp[index] || ""}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, "").slice(-1)
+                        if (!val) return
+                        setOtpError("")
+                        const newOtp = otp.split("")
+                        newOtp[index] = val
+                        const combined = newOtp.join("").slice(0, 4)
+                        setOtp(combined)
+                        if (index < 3) {
+                          document.getElementById(`otp-${index + 1}`)?.focus()
+                        } else if (combined.length === 4) {
+                          // No button: like Zomato, the last digit sends the code.
+                          handleVerifyOTP(null, combined)
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key !== "Backspace") return
+                        if (!otp[index] && index > 0) {
+                          document.getElementById(`otp-${index - 1}`)?.focus()
+                        } else {
+                          const newOtp = otp.split("")
+                          newOtp[index] = ""
+                          setOtp(newOtp.join(""))
+                        }
+                      }}
+                      className={`h-12 w-[43px] rounded-[7px] border bg-white text-center text-[20px] font-medium text-[#1C1C1C] caret-[#E23744] outline-none focus:border-[#1C1C1C] focus:shadow-[0_0_0_1px_#1C1C1C] disabled:opacity-60 dark:border-gray-700 dark:bg-gray-900 dark:text-white ${otpError ? "border-[#E23744]" : "border-[#D0D4DC]"}`}
+                    />
+                  ))}
+                </div>
+
+                {otpError && (
+                  <p role="alert" className="mt-3 text-center text-[14px] text-[#E23744]">
+                    {otpError}
+                  </p>
+                )}
+
+                <div className="mt-6 flex items-center justify-center gap-1.5 text-[16px] font-medium">
+                  {loading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin text-[#9197A6]" />
+                      <span className="text-[#9197A6]">Verifying...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Didn't get the OTP?</span>
+                      {blockTimer > 0 ? (
+                        <span className="text-[#9197A6]">Resend SMS</span>
+                      ) : resendTimer > 0 ? (
+                        <span className="text-[#9197A6]">Resend SMS in {resendTimer}s</span>
+                      ) : (
+                        <button type="button" onClick={handleResendOTP} className="text-[#EF4F5F]">
+                          Resend SMS
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {blockTimer > 0 && (
+                  <div className="mx-auto mt-5 w-fit rounded-lg border border-red-100 bg-red-50 px-5 py-2.5 text-center dark:border-red-900/50 dark:bg-red-950/20">
+                    <p className="text-[12px] font-medium uppercase tracking-wider text-[#E23744]">
+                      Too many failed attempts
+                    </p>
+                    <p className="text-[14px] font-medium text-[#E23744]">
+                      Try again after {Math.floor((blockTimer - 1) / 60)}:{String((blockTimer - 1) % 60).padStart(2, "0")}
+                    </p>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleEditNumber}
+                  className="mx-auto mt-auto shrink-0 pt-10 text-[16px] text-[#EF4F5F]"
+                  style={{ marginBottom: "calc(env(safe-area-inset-bottom, 0px) + 76px)" }}
+                >
+                  Go back to login methods
+                </button>
+              </div>
+            </motion.form>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Name Collection Modal */}

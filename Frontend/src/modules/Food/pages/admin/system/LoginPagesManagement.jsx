@@ -241,14 +241,17 @@ export default function LoginPagesManagement() {
           if (!open && !busy) setImageToDelete(null)
         }}
       >
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Delete this image?</DialogTitle>
-            <DialogDescription>
+        <DialogContent showCloseButton={false} className="max-w-sm bg-white p-6">
+          <DialogHeader className="items-center gap-3 text-center sm:items-center sm:text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-50">
+              <Trash2 className="h-6 w-6 text-red-600" />
+            </div>
+            <DialogTitle className="text-lg font-semibold text-slate-900">Delete this image?</DialogTitle>
+            <DialogDescription className="text-sm leading-relaxed text-slate-500">
               It will be removed from the {activeTab.label.toLowerCase()} login page. This can't be undone.
             </DialogDescription>
           </DialogHeader>
-          <div className="mt-2 flex justify-end gap-2">
+          <div className="mt-6 grid grid-cols-2 gap-3">
             <Button type="button" variant="outline" disabled={busy} onClick={() => setImageToDelete(null)}>
               Cancel
             </Button>

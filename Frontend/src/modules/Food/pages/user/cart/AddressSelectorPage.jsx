@@ -86,7 +86,7 @@ const showAddressRemovedBrandedToast = () => {
       <div className="w-[calc(100vw-28px)] sm:w-[340px] flex items-center gap-2.5 py-2 px-3 rounded-2xl bg-white/72 dark:bg-zinc-900/72 backdrop-blur-xl border border-white/60 dark:border-white/10 shadow-[0_8px_28px_rgba(0,0,0,0.14)] ring-1 ring-black/5 animate-in fade-in slide-in-from-top-2 duration-300">
         <div className="h-10 w-10 rounded-xl flex items-center justify-center shadow-md flex-shrink-0">
           <img
-            src="/logo-icon.png"
+            src="/logo-icon.webp"
             alt="Foodie"
             className="w-full h-full object-contain"
           />

@@ -612,9 +612,9 @@ export default function RestaurantLogin() {
           {/* Logo & Header */}
           <div className="mb-5 text-center flex flex-col items-center">
             <img
-              src="/logo.png"
+              src="/logo.webp"
               alt="Foodie Logo"
-              className="h-28 -mb-3.5 object-contain drop-shadow-md"
+              className="h-14 w-auto mb-3 rounded-xl object-contain shadow-md"
             />
             <h2 className="text-[25px] font-extrabold text-[#B80B3D] dark:text-red-400 tracking-tight font-['Outfit']">
               Restaurant Partner

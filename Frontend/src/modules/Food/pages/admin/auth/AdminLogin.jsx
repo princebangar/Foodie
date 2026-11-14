@@ -226,9 +226,9 @@ export default function AdminLogin() {
 
         <form onSubmit={handleLogin} className="w-full max-w-[350px] sm:max-w-[380px] p-7 sm:p-9 md:p-0 rounded-[2rem] md:rounded-none bg-white/10 md:bg-transparent backdrop-blur-xl md:backdrop-blur-none border border-white/10 md:border-none shadow-2xl md:shadow-none shadow-black/25 flex flex-col items-center -mt-16 md:-mt-16 z-10">
           {/* Logo */}
-          <div className="w-[110px] md:w-[150px] mb-4 select-none flex justify-center items-center md:items-start">
+          <div className="w-[180px] md:w-[230px] mb-4 select-none flex justify-center items-center md:items-start">
              <img
-              src="/logo.png"
+              src="/logo.webp"
               alt="FOODIE Logo"
               className="w-full object-contain rounded-xl shadow-lg border border-white/10 md:border-white/5"
             />

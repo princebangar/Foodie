@@ -1,6 +1,9 @@
-﻿import React, { useState, useEffect, useRef } from "react"
-import { motion, AnimatePresence, useScroll, useTransform, useSpring } from "framer-motion"
-import { useNavigate } from "react-router-dom"
+﻿import React, { useEffect, useRef } from "react"
+import { motion, MotionConfig } from "framer-motion"
+import Lenis from "lenis"
+import "lenis/dist/lenis.css"
+import { RestaurantOnboardingSection, DeliveryOnboardingSection, PatternDivider } from "./landing/PartnerOnboardingSections"
+import { openAppStore } from "./landing/appLinks"
 import {
   Clock,
   MapPin,
@@ -103,49 +106,56 @@ const TESTIMONIALS = [
   }
 ]
 
+// One easing curve for every scroll reveal so the page feels consistent
+const EASE_OUT = [0.22, 1, 0.36, 1]
+const REVEAL_VIEWPORT = { once: true, amount: 0.2 }
+
 export default function MasterLandingPage() {
-  const navigate = useNavigate()
-  const [isScrolled, setIsScrolled] = useState(false)
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [activeTestimonial, setActiveTestimonial] = useState(0)
+  const lenisRef = useRef(null)
 
-  const mobileSectionRef = useRef(null)
-
-  // Tracks scroll progress over the mobile section
-  const { scrollYProgress: mobileScrollYProgress } = useScroll({
-    target: mobileSectionRef,
-    offset: ["start center", "end start"]
-  });
-
-  // Maps scroll progress to 3D rotation and position values
-  const phoneRotateX = useTransform(mobileScrollYProgress, [0, 0.5, 1], [40, 5, -20]);
-  const phoneRotateY = useTransform(mobileScrollYProgress, [0, 0.5, 1], [-30, 15, 30]);
-  const phoneY = useTransform(mobileScrollYProgress, [0, 0.5, 1], [150, 0, -150]);
-  const phoneScale = useTransform(mobileScrollYProgress, [0, 0.5, 1], [0.8, 1.05, 0.9]);
-
-  // Applies spring physics for a smooth, natural feel
-  const smoothRotateX = useSpring(phoneRotateX, { damping: 20, stiffness: 100 });
-  const smoothRotateY = useSpring(phoneRotateY, { damping: 20, stiffness: 100 });
-  const smoothY = useSpring(phoneY, { damping: 20, stiffness: 100 });
-  const smoothScale = useSpring(phoneScale, { damping: 20, stiffness: 100 });
-
+  // Warm the cache for the Download App phone so it doesn't pop in mid-animation
   useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 50)
+    ["/landing/app-qr.webp", "/logo.webp"].forEach((src) => {
+      const img = new Image()
+      img.src = src
+    })
+  }, [])
+
+  // Smooth (inertia) scrolling for the landing page only; skipped for reduced-motion users
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return undefined
+
+    const lenis = new Lenis({
+      autoRaf: true,
+      duration: 1.1,
+      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+      smoothWheel: true,
+      anchors: { offset: 0 },
+    })
+    lenisRef.current = lenis
+
+    // Opened with a hash (e.g. /#partner-delivery): jump there once layout has settled
+    if (window.location.hash) {
+      const target = document.querySelector(window.location.hash)
+      if (target) requestAnimationFrame(() => lenis.scrollTo(target, { immediate: true }))
     }
-    window.addEventListener("scroll", handleScroll)
-    return () => window.removeEventListener("scroll", handleScroll)
+
+    return () => {
+      lenis.destroy()
+      lenisRef.current = null
+    }
   }, [])
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setActiveTestimonial((prev) => (prev + 1) % TESTIMONIALS.length)
-    }, 5000)
-    return () => clearInterval(interval)
-  }, [])
+  const scrollToId = (id) => {
+    const el = document.getElementById(id)
+    if (!el) return
+    if (lenisRef.current) lenisRef.current.scrollTo(el)
+    else el.scrollIntoView({ behavior: "smooth" })
+  }
 
   return (
-    <div className="min-h-screen bg-[#0B0B0B] text-white font-sans selection:bg-[#D32F2F]/30 overflow-x-hidden scroll-smooth">
+    <MotionConfig reducedMotion="user">
+    <div className="min-h-screen bg-[#0B0B0B] text-white font-['Figtree',sans-serif] [&_:is(h1,h2,h3,h4)]:font-['Outfit',sans-serif] [&_:is(h1,h2,h3,h4)]:tracking-tight selection:bg-[#D32F2F]/30 overflow-x-hidden">
 
       {/* 2. Hero Section */}
       <section id="home" className="relative h-screen flex items-center justify-center overflow-hidden">
@@ -170,8 +180,8 @@ export default function MasterLandingPage() {
             transition={{ duration: 0.8, ease: "easeOut" }}
             className="mb-2"
           >
-            <h1 className="text-7xl md:text-[110px] font-black italic tracking-tighter drop-shadow-2xl text-white">
-              <span className="relative inline-block px-[0.22em] text-white"><span aria-hidden="true" className="absolute top-[0.06em] -bottom-[0.05em] inset-x-0 -skew-x-12 rounded-[0.14em] bg-[#E53935] shadow-[0_0.08em_0.35em_rgba(0,0,0,0.5)]" /><span className="relative text-[#F5EEE6]">Foodie</span></span>
+            <h1 className="m-0">
+              <img src="/logo.webp" alt="Foodie" className="h-[80px] md:h-[120px] w-auto rounded-2xl md:rounded-3xl shadow-2xl" />
             </h1>
           </motion.div>
 
@@ -182,7 +192,7 @@ export default function MasterLandingPage() {
             transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
             className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6 drop-shadow-lg"
           >
-            <br className="md:hidden" /> food & takeaway services
+            Food delivery & takeaway
           </motion.h2>
 
           {/* Description */}
@@ -237,7 +247,7 @@ export default function MasterLandingPage() {
           animate={{ opacity: 1 }}
           transition={{ duration: 1, delay: 1.5 }}
           className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-row items-center gap-2 cursor-pointer text-white hover:text-gray-300 transition-colors z-30 animate-bounce"
-          onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}
+          onClick={() => scrollToId("features")}
         >
           <span className="text-[13px] font-medium tracking-wide">Scroll down</span>
           <ChevronDown className="w-6 h-6 mt-[1px]" />
@@ -256,21 +266,24 @@ export default function MasterLandingPage() {
         <motion.div
           animate={{ y: [-10, 10, -10], rotate: [-2, 2, -2] }}
           transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute top-1/2 left-10 md:left-24 -translate-y-1/2 z-10 drop-shadow-[0_20px_30px_rgba(0,0,0,0.2)]"
+          className="absolute top-1/2 left-10 md:left-24 -translate-y-1/2 z-10 will-change-transform"
         >
-          <img src="/landing/burger-real.png" alt="Burger" className="w-20 md:w-64 object-contain opacity-50 md:opacity-100" />
+          <img src="/landing/burger-real.webp" alt="Burger" width={560} height={404} decoding="async" className="w-20 md:w-64 h-auto object-contain opacity-50 md:opacity-100 drop-shadow-[0_20px_30px_rgba(0,0,0,0.2)]" />
         </motion.div>
 
         {/* Dim sums / Momos - Using user's provided dish image */}
         <motion.div
           animate={{ y: [10, -10, 10], rotate: [5, -5, 5] }}
           transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute top-10 right-10 md:right-20 z-10 drop-shadow-[0_20px_30px_rgba(0,0,0,0.15)]"
+          className="absolute top-10 right-10 md:right-20 z-10 will-change-transform"
         >
           <img
-            src="/landing/dish-img.png"
+            src="/landing/dish-img.webp"
             alt="Dim Sums"
-            className="w-24 md:w-64 object-contain opacity-50 md:opacity-100"
+            width={500}
+            height={500}
+            decoding="async"
+            className="w-24 md:w-64 h-auto object-contain opacity-50 md:opacity-100 drop-shadow-[0_20px_30px_rgba(0,0,0,0.15)]"
           />
         </motion.div>
 
@@ -278,18 +291,18 @@ export default function MasterLandingPage() {
         <motion.div
           animate={{ y: [-15, 15, -15], rotate: [-10, 10, -10] }}
           transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute bottom-32 right-10 md:right-32 z-10 drop-shadow-[0_20px_30px_rgba(0,0,0,0.2)]"
+          className="absolute bottom-32 right-10 md:right-32 z-10 will-change-transform"
         >
-          <img src="/landing/pizza-free.png" alt="Pizza" className="w-20 md:w-60 object-contain opacity-50 md:opacity-100" />
+          <img src="/landing/pizza-free.webp" alt="Pizza" width={520} height={527} decoding="async" className="w-20 md:w-60 h-auto object-contain opacity-50 md:opacity-100 drop-shadow-[0_20px_30px_rgba(0,0,0,0.2)]" />
         </motion.div>
 
         {/* Center Content */}
         <div className="relative z-20 text-center max-w-3xl mx-auto flex flex-col items-center px-6">
           <h2 className="text-5xl md:text-[68px] font-bold text-[#E64A53] leading-tight mb-8">
-            Better food for <br /> more people
+            Good food, <br /> without the wait
           </h2>
           <p className="text-xl md:text-[22px] text-gray-500 font-medium leading-relaxed max-w-2xl">
-            For over a decade, we've enabled our customers to discover new tastes, delivered right to their doorstep
+            Find great places to eat nearby, then get your meal delivered or have it ready for pickup when you arrive.
           </p>
         </div>
 
@@ -341,10 +354,10 @@ export default function MasterLandingPage() {
       <section className="relative pt-20 pb-16 md:pb-24 bg-[#F35E6B] overflow-hidden text-center">
         <div className="max-w-5xl mx-auto px-6 relative z-10">
           <h2 className="text-3xl md:text-[40px] font-black text-white mb-4 tracking-tight leading-tight">
-            What's waiting for you <br className="hidden md:block" /> on the app?
+            Everything you need, <br className="hidden md:block" /> in one app
           </h2>
           <p className="text-red-100 font-medium text-base md:text-lg max-w-2xl mx-auto mb-10 leading-relaxed">
-            Our app is packed with features that <br className="hidden md:block" /> enable you to experience food <br className="hidden md:block" /> delivery like never before
+            Veg mode, party orders, curated collections <br className="hidden md:block" /> and offers, all a tap away
           </p>
 
           <div className="relative w-full max-w-[700px] mx-auto h-[320px] flex justify-center mt-2 scale-[0.85] sm:scale-[0.9] md:scale-100 origin-top">
@@ -368,14 +381,14 @@ export default function MasterLandingPage() {
 
             {/* Left Floating Cards - Pulled very close */}
             <div className="flex absolute left-[-5%] sm:left-[2%] md:left-[12%] top-[8%] z-30 flex-col gap-4 md:gap-5">
-              <motion.div whileHover={{ scale: 1.15, rotate: -5, zIndex: 50 }} whileTap={{ scale: 0.95 }} animate={{ y: [-4, 4, -4] }} transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }} className="group bg-white rounded-[20px] shadow-[0_10px_30px_rgba(0,0,0,0.08)] p-2.5 pb-3 border border-gray-100 flex flex-col gap-1.5 items-center text-center w-[90px] md:w-[100px] cursor-pointer">
+              <motion.div whileHover={{ scale: 1.15, rotate: -5, zIndex: 50 }} whileTap={{ scale: 0.95 }} animate={{ y: [-4, 4, -4] }} transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }} className="will-change-transform group bg-white rounded-[20px] shadow-[0_10px_30px_rgba(0,0,0,0.08)] p-2.5 pb-3 border border-gray-100 flex flex-col gap-1.5 items-center text-center w-[90px] md:w-[100px] cursor-pointer">
                 <div className="w-12 h-12 md:w-14 md:h-14 bg-gray-50 rounded-2xl flex items-center justify-center mb-0.5 group-hover:bg-green-50 group-hover:shadow-inner transition-colors duration-300 border border-transparent group-hover:border-green-100 relative overflow-hidden">
                   <div className="absolute inset-0 bg-green-400 opacity-0 group-hover:opacity-20 group-hover:animate-ping rounded-2xl"></div>
                   <div className="text-[28px] md:text-[32px] leading-none group-hover:scale-125 group-hover:-rotate-12 transition-transform duration-300 relative z-10">🥗</div>
                 </div>
                 <span className="font-semibold text-[10px] md:text-[11px] text-gray-700 group-hover:text-green-600 transition-colors">Healthy</span>
               </motion.div>
-              <motion.div whileHover={{ scale: 1.15, rotate: 5, zIndex: 50 }} whileTap={{ scale: 0.95 }} animate={{ y: [4, -4, 4] }} transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut" }} className="group bg-white rounded-[20px] shadow-[0_10px_30px_rgba(0,0,0,0.08)] p-2.5 pb-3 border border-gray-100 flex flex-col gap-1.5 items-center text-center w-[90px] md:w-[100px] ml-4 md:ml-6 cursor-pointer">
+              <motion.div whileHover={{ scale: 1.15, rotate: 5, zIndex: 50 }} whileTap={{ scale: 0.95 }} animate={{ y: [4, -4, 4] }} transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut" }} className="will-change-transform group bg-white rounded-[20px] shadow-[0_10px_30px_rgba(0,0,0,0.08)] p-2.5 pb-3 border border-gray-100 flex flex-col gap-1.5 items-center text-center w-[90px] md:w-[100px] ml-4 md:ml-6 cursor-pointer">
                 <div className="w-12 h-12 md:w-14 md:h-14 bg-gray-50 rounded-2xl flex items-center justify-center mb-0.5 group-hover:bg-yellow-50 group-hover:shadow-inner transition-colors duration-300 border border-transparent group-hover:border-yellow-100 relative overflow-hidden">
                   <div className="absolute inset-0 bg-yellow-400 opacity-0 group-hover:opacity-20 group-hover:animate-ping rounded-2xl"></div>
                   <div className="text-[28px] md:text-[32px] leading-none group-hover:scale-125 group-hover:rotate-12 transition-transform duration-300 relative z-10">🎉</div>
@@ -385,7 +398,7 @@ export default function MasterLandingPage() {
             </div>
 
             {/* Left Top Card - Veg Mode */}
-            <motion.div whileHover={{ scale: 1.15, zIndex: 50 }} whileTap={{ scale: 0.95 }} animate={{ y: [-3, 3, -3] }} transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }} className="flex group absolute left-[15%] sm:left-[20%] md:left-[30%] top-[-8%] md:top-[-6%] z-30 bg-white rounded-[20px] shadow-[0_10px_30px_rgba(0,0,0,0.12)] p-2.5 pb-3 border border-gray-100 flex-col gap-2 items-center text-center w-[90px] md:w-[100px] cursor-pointer">
+            <motion.div whileHover={{ scale: 1.15, zIndex: 50 }} whileTap={{ scale: 0.95 }} animate={{ y: [-3, 3, -3] }} transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }} className="will-change-transform flex group absolute left-[15%] sm:left-[20%] md:left-[30%] top-[-8%] md:top-[-6%] z-30 bg-white rounded-[20px] shadow-[0_10px_30px_rgba(0,0,0,0.12)] p-2.5 pb-3 border border-gray-100 flex-col gap-2 items-center text-center w-[90px] md:w-[100px] cursor-pointer">
               <div className="w-[44px] md:w-[50px] h-[22px] md:h-[26px] bg-[#1FA54E] rounded-full flex items-center p-[3px] group-hover:bg-[#188a40] transition-colors relative overflow-hidden shadow-inner group-hover:shadow-[0_0_15px_rgba(31,165,78,0.4)]">
                 <div className="w-[16px] md:w-[20px] h-[16px] md:h-[20px] bg-white rounded-full shadow-sm group-hover:scale-90 transform group-hover:translate-x-[22px] md:group-hover:translate-x-[24px] transition-all duration-300 absolute left-[3px]"></div>
               </div>
@@ -394,14 +407,14 @@ export default function MasterLandingPage() {
 
             {/* Right Floating Cards - Pulled very close */}
             <div className="flex absolute right-[-5%] sm:right-[2%] md:right-[12%] top-[12%] md:top-[14%] z-30 flex-col gap-4 md:gap-5 items-end">
-              <motion.div whileHover={{ scale: 1.15, rotate: 5, zIndex: 50 }} whileTap={{ scale: 0.95 }} animate={{ y: [3, -3, 3] }} transition={{ duration: 4.2, repeat: Infinity, ease: "easeInOut" }} className="group bg-white rounded-[20px] shadow-[0_10px_30px_rgba(0,0,0,0.08)] p-2.5 pb-3 border border-gray-100 flex flex-col gap-1.5 items-center text-center w-[90px] md:w-[100px] cursor-pointer">
+              <motion.div whileHover={{ scale: 1.15, rotate: 5, zIndex: 50 }} whileTap={{ scale: 0.95 }} animate={{ y: [3, -3, 3] }} transition={{ duration: 4.2, repeat: Infinity, ease: "easeInOut" }} className="will-change-transform group bg-white rounded-[20px] shadow-[0_10px_30px_rgba(0,0,0,0.08)] p-2.5 pb-3 border border-gray-100 flex flex-col gap-1.5 items-center text-center w-[90px] md:w-[100px] cursor-pointer">
                 <div className="w-12 h-12 md:w-14 md:h-14 bg-gray-50 rounded-2xl flex items-center justify-center mb-0.5 group-hover:bg-orange-50 group-hover:shadow-inner transition-colors duration-300 border border-transparent group-hover:border-orange-100 relative overflow-hidden">
                   <div className="absolute inset-0 bg-orange-400 opacity-0 group-hover:opacity-20 group-hover:animate-ping rounded-2xl"></div>
                   <div className="text-[28px] md:text-[32px] leading-none group-hover:scale-125 group-hover:rotate-12 transition-transform duration-300 relative z-10">🍝</div>
                 </div>
                 <span className="font-semibold text-[10px] md:text-[11px] text-gray-700 group-hover:text-orange-500 transition-colors">Gourmet</span>
               </motion.div>
-              <motion.div whileHover={{ scale: 1.15, rotate: -5, zIndex: 50 }} whileTap={{ scale: 0.95 }} animate={{ y: [-5, 5, -5] }} transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }} className="group bg-white rounded-[20px] shadow-[0_10px_30px_rgba(0,0,0,0.08)] p-2.5 pb-3 border border-gray-100 flex flex-col gap-1.5 items-center text-center w-[90px] md:w-[100px] mr-4 md:mr-6 cursor-pointer">
+              <motion.div whileHover={{ scale: 1.15, rotate: -5, zIndex: 50 }} whileTap={{ scale: 0.95 }} animate={{ y: [-5, 5, -5] }} transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }} className="will-change-transform group bg-white rounded-[20px] shadow-[0_10px_30px_rgba(0,0,0,0.08)] p-2.5 pb-3 border border-gray-100 flex flex-col gap-1.5 items-center text-center w-[90px] md:w-[100px] mr-4 md:mr-6 cursor-pointer">
                 <div className="w-12 h-12 md:w-14 md:h-14 bg-gray-50 rounded-2xl flex items-center justify-center mb-0.5 group-hover:bg-red-50 group-hover:shadow-inner transition-colors duration-300 border border-transparent group-hover:border-red-100 relative overflow-hidden">
                   <div className="absolute inset-0 bg-red-400 opacity-0 group-hover:opacity-20 group-hover:animate-ping rounded-2xl"></div>
                   <div className="text-[28px] md:text-[32px] leading-none group-hover:scale-125 group-hover:-rotate-12 transition-transform duration-300 relative z-10">🍔</div>
@@ -411,9 +424,9 @@ export default function MasterLandingPage() {
             </div>
 
             {/* Right Top Card - Offers */}
-            <motion.div whileHover={{ scale: 1.15, zIndex: 50 }} whileTap={{ scale: 0.95 }} animate={{ y: [4, -4, 4] }} transition={{ duration: 3.8, repeat: Infinity, ease: "easeInOut" }} className="flex group absolute right-[15%] sm:right-[20%] md:right-[30%] top-[0%] z-30 bg-white rounded-[20px] shadow-[0_10px_30px_rgba(0,0,0,0.12)] p-2.5 pb-3 border border-gray-100 flex-col gap-2 items-center text-center w-[90px] md:w-[100px] cursor-pointer">
+            <motion.div whileHover={{ scale: 1.15, zIndex: 50 }} whileTap={{ scale: 0.95 }} animate={{ y: [4, -4, 4] }} transition={{ duration: 3.8, repeat: Infinity, ease: "easeInOut" }} className="will-change-transform flex group absolute right-[15%] sm:right-[20%] md:right-[30%] top-[0%] z-30 bg-white rounded-[20px] shadow-[0_10px_30px_rgba(0,0,0,0.12)] p-2.5 pb-3 border border-gray-100 flex-col gap-2 items-center text-center w-[90px] md:w-[100px] cursor-pointer">
               <div className="w-[36px] md:w-[42px] h-[36px] md:h-[42px] bg-blue-50 rounded-[12px] flex items-center justify-center group-hover:bg-blue-100 group-hover:shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all duration-300">
-                <img src="/landing/offers.png" alt="Offers" className="w-[20px] h-[20px] md:w-[24px] md:h-[24px] object-contain group-hover:scale-110 transition-transform" />
+                <img src="/landing/offers.webp" alt="Offers" width={96} height={96} decoding="async" className="w-[20px] h-[20px] md:w-[24px] md:h-[24px] object-contain group-hover:scale-110 transition-transform" />
               </div>
               <span className="font-semibold text-[10px] md:text-[11px] text-gray-700 mt-1 group-hover:text-blue-500 transition-colors">Offers</span>
             </motion.div>
@@ -430,9 +443,9 @@ export default function MasterLandingPage() {
       </section>
 
       {/* 4. How Foodie Works */}
-      <section className="py-24 px-6 bg-[#111] relative overflow-hidden">
+      <section className="pt-6 md:pt-8 pb-6 md:pb-8 px-6 bg-[#111] relative overflow-hidden">
         <div className="max-w-7xl mx-auto relative z-10">
-          <div className="text-center mb-20">
+          <div className="text-center mb-12 md:mb-14">
             <h2 className="text-4xl md:text-5xl font-black mb-4">How It <span className="text-[#D32F2F]">Works</span></h2>
             <p className="text-gray-400 text-lg max-w-2xl mx-auto">Your journey to a perfect meal in four simple steps.</p>
           </div>
@@ -447,8 +460,8 @@ export default function MasterLandingPage() {
                   key={idx}
                   initial={{ opacity: 0, y: 30 }}
                   whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.5, delay: idx * 0.15 }}
+                  viewport={REVEAL_VIEWPORT}
+                  transition={{ duration: 0.7, delay: idx * 0.12, ease: EASE_OUT }}
                   className="relative flex flex-col items-center text-center group"
                 >
                   <div className="w-20 h-20 rounded-full bg-[#1A1A1A] border-2 border-[#333] group-hover:border-[#D32F2F] flex items-center justify-center mb-6 relative z-10 transition-colors duration-300 shadow-xl">
@@ -468,39 +481,34 @@ export default function MasterLandingPage() {
         </div>
       </section>
 
-      {/* Premium Red Transition Divider */}
-      <div className="relative w-full h-[150px] md:h-[250px] bg-[#111] overflow-hidden flex justify-center mt-[-1px]">
-        {/* Faint red geometric diamond patterns */}
-        <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg stroke=\'%23D32F2F\' stroke-width=\'1\'%3E%3Cpath d=\'M30 0l30 30-30 30L0 30z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")', backgroundSize: '120px 120px' }}></div>
+      <PatternDivider from="#111111" to="#0B0B0B" edge />
 
-        {/* Massive White Convex Curve */}
-        <div className="absolute bottom-[-2px] left-0 w-full z-20">
-          <svg viewBox="0 0 1440 200" className="w-full h-[80px] md:h-[150px] block" preserveAspectRatio="none">
-            <path d="M0,200 L0,150 Q720,0 1440,150 L1440,200 Z" fill="#ffffff" />
-          </svg>
-        </div>
-      </div>
+      {/* 5. Partner onboarding */}
+      <RestaurantOnboardingSection />
+      <PatternDivider from="#0B0B0B" to="#111111" edge />
+      <DeliveryOnboardingSection />
 
-
+      <PatternDivider from="#111111" to="#ffffff" />
 
       {/* 6. Foodie Experience */}
-      <section className="py-24 px-6 bg-white">
+      <section className="pt-8 md:pt-10 pb-16 md:pb-20 px-6 bg-white">
         <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center gap-16">
           <motion.div
-            initial={{ opacity: 0, x: -50 }}
+            initial={{ opacity: 0, x: -40 }}
             whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.8 }}
+            viewport={REVEAL_VIEWPORT}
+            transition={{ duration: 0.8, ease: EASE_OUT }}
             className="w-full lg:w-1/2 relative min-h-[500px] md:min-h-[600px] flex items-center justify-center"
           >
             {/* Background Image (Restaurant Exterior) */}
             <div className="absolute top-0 right-0 w-[85%] h-[80%] rounded-[32px] overflow-hidden shadow-2xl">
-              <div className="absolute inset-0 bg-[#D32F2F]/10 z-10 mix-blend-overlay" />
+              <div className="absolute inset-0 bg-[#D32F2F]/[0.06] z-10" />
               <img
-                src="https://images.unsplash.com/photo-1549488344-1f9b8d2bd1f3?auto=format&fit=crop&w=1000&q=80"
+                src="https://images.unsplash.com/photo-1549488344-1f9b8d2bd1f3?auto=format&fit=crop&w=1000&q=75"
                 alt="Roadside Restaurant"
                 className="w-full h-full object-cover"
                 loading="lazy"
+                decoding="async"
               />
             </div>
 
@@ -508,13 +516,17 @@ export default function MasterLandingPage() {
             <motion.div
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.2, delay: 0 }}
+              viewport={REVEAL_VIEWPORT}
+              transition={{ duration: 0.8, delay: 0.15, ease: EASE_OUT }}
               className="absolute bottom-0 left-0 w-[75%] h-[55%] bg-white p-3 rounded-[24px] shadow-[0_20px_50px_rgba(0,0,0,0.2)] z-20"
             >
               <img
-                src="/landing/restaurant-food.jpg"
+                src="/landing/restaurant-food.webp"
                 alt="Delicious Food"
+                width={1000}
+                height={1500}
+                loading="lazy"
+                decoding="async"
                 className="w-full h-full object-cover rounded-[16px]"
               />
             </motion.div>
@@ -523,7 +535,7 @@ export default function MasterLandingPage() {
             <motion.div
               animate={{ y: [0, -10, 0] }}
               transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-              className="absolute top-10 -left-6 md:-left-10 bg-[#1A1A1A] p-4 rounded-2xl border border-white/10 shadow-xl flex items-center gap-4 z-30"
+              className="will-change-transform absolute top-10 -left-6 md:-left-10 bg-[#1A1A1A] p-4 rounded-2xl border border-white/10 shadow-xl flex items-center gap-4 z-30"
             >
               <div className="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center text-green-500">
                 <CheckCircle2 className="w-6 h-6" />
@@ -536,15 +548,15 @@ export default function MasterLandingPage() {
           </motion.div>
 
           <motion.div
-            initial={{ opacity: 0, x: 50 }}
+            initial={{ opacity: 0, x: 40 }}
             whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.8 }}
+            viewport={REVEAL_VIEWPORT}
+            transition={{ duration: 0.8, ease: EASE_OUT }}
             className="w-full lg:w-1/2 space-y-10"
           >
             <div>
-              <h2 className="text-4xl md:text-5xl font-black mb-6 leading-tight text-black">Elevate your <span className="text-[#D32F2F]">dining & takeaway experience</span></h2>
-              <p className="text-gray-600 text-lg">We've reimagined everything from discovering places to paying the bill. It's smart, seamless, and incredibly fast.</p>
+              <h2 className="text-4xl md:text-5xl font-black mb-6 leading-tight text-black">Dine in or take away, <span className="text-[#D32F2F]">without the queue</span></h2>
+              <p className="text-gray-600 text-lg">Find a place, book your table or order ahead, then pay the bill from your phone.</p>
             </div>
 
             <div className="space-y-6">
@@ -573,17 +585,17 @@ export default function MasterLandingPage() {
 
 
       {/* 8. Download App */}
-      <section ref={mobileSectionRef} className="py-24 px-6 bg-gradient-to-b from-[#111] to-[#0B0B0B]">
-        <div className="max-w-6xl mx-auto bg-gradient-to-br from-[#1A1A1A] to-[#0A0A0A] rounded-[32px] md:rounded-[48px] border border-white/10 p-8 md:p-20 overflow-hidden relative shadow-2xl">
-          <div className="absolute inset-0 bg-[#D32F2F]/5 blur-3xl pointer-events-none" />
+      <section className="py-14 md:py-16 px-6 bg-gradient-to-b from-[#111] to-[#0B0B0B]">
+        <div className="max-w-6xl mx-auto bg-gradient-to-br from-[#1A1A1A] to-[#0A0A0A] rounded-[32px] md:rounded-[48px] border border-white/10 px-8 pt-8 md:px-20 md:pt-20 overflow-hidden relative shadow-2xl">
+          <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_70%_60%,rgba(211,47,47,0.10),transparent_65%)]" />
 
           <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-12">
-            <div className="w-full md:w-1/2 text-center md:text-left">
+            <div className="w-full md:w-1/2 text-center md:text-left md:pb-20">
               <h2 className="text-4xl md:text-5xl lg:text-6xl font-black mb-6 leading-tight text-white">
                 Get the <span className="relative inline-block px-[0.22em] text-white"><span aria-hidden="true" className="absolute inset-y-[0.06em] inset-x-0 -skew-x-12 rounded-[0.14em] bg-[#E53935] shadow-[0_0.08em_0.35em_rgba(0,0,0,0.5)]" /><span className="relative">Foodie</span></span> App
               </h2>
               <p className="text-gray-400 text-lg mb-10 max-w-md mx-auto md:mx-0">
-                Download our app for the fastest booking experience, exclusive offers, and live order tracking.
+                Book tables, order takeaway and track every order live, plus offers you only get in the app.
               </p>
 
               <div className="flex flex-col sm:flex-row items-center gap-4 justify-center md:justify-start relative z-30">
@@ -622,158 +634,167 @@ export default function MasterLandingPage() {
               </div>
             </div>
 
-            <div className="w-full md:w-1/2 flex justify-center relative" style={{ perspective: 1000 }}>
-              {/* Abstract decorative elements behind phone */}
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 bg-[#D32F2F]/20 rounded-full blur-3xl" />
+            {/* Observe the untransformed wrapper (not the shifted/clipped phone) so the trigger fires as soon as this area scrolls into view */}
+            <motion.div
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true, amount: 0.15 }}
+              className="w-full md:w-1/2 flex justify-center relative self-end"
+            >
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[28rem] h-[28rem] rounded-full pointer-events-none bg-[radial-gradient(circle,rgba(211,47,47,0.28),transparent_65%)]" />
 
-              {/* Phone Mockup Placeholder */}
+              {/* Static phone, cut off by the card's bottom edge */}
               <motion.div
-                initial={{ opacity: 0, y: 150, scale: 0.5 }}
-                whileInView={{ opacity: 1, y: 0, scale: 1 }}
-                viewport={{ once: true, margin: "-50% 0px 0px 0px" }}
-                transition={{ duration: 0.8, type: "spring", bounce: 0.4 }}
+                variants={{
+                  hidden: { opacity: 0, y: 120 },
+                  visible: { opacity: 1, y: 0, transition: { duration: 0.9, ease: [0.22, 1, 0.36, 1] } },
+                }}
+                style={{ willChange: "transform, opacity" }}
+                className="relative w-[290px] md:w-[320px] h-[440px] md:h-[480px] bg-[#1A1A1A] rounded-t-[48px] p-3 pb-0 shadow-2xl ring-1 ring-white/10"
               >
-                <motion.div 
-                  style={{ 
-                    rotateX: smoothRotateX, 
-                    rotateY: smoothRotateY, 
-                    y: smoothY, 
-                    scale: smoothScale 
-                  }}
-                  className="relative w-[260px] h-[554px] bg-black border-[8px] border-[#333] rounded-[36px] shadow-2xl overflow-hidden"
-                >
-                  {/* Screen content */}
-                  <div className="absolute inset-0 bg-black flex flex-col overflow-hidden rounded-[28px]">
-                  
-                  {/* Phone Status Bar */}
-                  <div className="w-full h-7 bg-black flex justify-between items-center px-5 z-10 shrink-0">
-                    {/* Time */}
-                    <span className="text-[12px] font-semibold text-white tracking-wide">9:41</span>
-                    {/* Icons (Signal, Wifi, Battery) */}
-                    <div className="flex items-center gap-1.5 opacity-90 mt-0.5">
-                      <svg className="w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M2,22L22,2L22,22H2Z" />
-                      </svg>
-                      <svg className="w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12,3C7.95,3 4.21,4.34 1.2,6.6L12,21.5L22.8,6.6C19.79,4.34 16.05,3 12,3M12,5.5C15.06,5.5 17.86,6.34 20.15,7.74L12,18.97L3.85,7.74C6.14,6.34 8.94,5.5 12,5.5Z" />
-                      </svg>
-                      <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M16.67,4H15V2H9V4H7.33C6.6,4 6,4.6 6,5.33V20.67C6,21.4 6.6,22 7.33,22H16.67C17.4,22 18,21.4 18,20.67V5.33C18,4.6 17.4,4 16.67,4Z" />
-                      </svg>
-                    </div>
+                <div className="relative h-full bg-white rounded-t-[38px] overflow-hidden flex flex-col items-center pt-16 px-6">
+                  <div className="absolute top-3 left-1/2 -translate-x-1/2 w-28 h-7 bg-[#1A1A1A] rounded-full" />
+                  <p className="text-center text-lg md:text-xl font-semibold text-gray-700 leading-snug mb-6">
+                    Scan the QR code to<br />download the app
+                  </p>
+                  <div className="p-3 rounded-2xl border-2 border-[#D32F2F]/20 bg-white shadow-sm">
+                    <img src="/landing/app-qr.webp" alt="QR code to download the Foodie app" loading="eager" decoding="async" width={208} height={208} className="w-48 h-48 md:w-52 md:h-52 block" />
                   </div>
-
-                  <div className="flex-1 w-full relative">
-                    <img 
-                      src="/landing/phone-screen-1.webp" 
-                      alt="App Screen" 
-                      className="absolute inset-0 w-full h-full object-cover object-top"
-                      style={{ imageRendering: 'high-quality', WebkitFontSmoothing: 'antialiased' }} 
-                    />
-                  </div>
+                  <img src="/logo.webp" alt="Foodie" loading="eager" decoding="async" className="mt-5 h-10 w-auto rounded-lg" />
                 </div>
-                </motion.div>
               </motion.div>
-            </div>
+            </motion.div>
           </div>
         </div>
       </section>
 
       {/* 9. Footer */}
-      <footer id="contact" className="bg-[#050505] pt-24 pb-10 border-t border-white/10">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12 mb-16">
+      <footer id="contact" className="bg-[#050505] pt-14 pb-8 border-t border-white/10">
+        <div className="max-w-6xl mx-auto px-6">
 
-            {/* Brand */}
-            <div>
-              <div className="flex items-center gap-2 mb-6">
-                <img src="/logo-icon.png" alt="Foodie" className="h-10 w-10 object-contain" />
-                <span className="text-xl font-extrabold text-white tracking-tight">Foodie</span>
+          {/* Tagline */}
+          <p className="font-['Outfit'] text-2xl md:text-[34px] font-semibold leading-snug text-white/90 max-w-3xl mb-10">
+            India's smartest dining and takeaway platform. Skip the lines, discover new tastes, and{" "}
+            <span className="text-[#E53935] italic whitespace-nowrap">dine better.</span>
+          </p>
+
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-x-8 gap-y-10 mb-10">
+            {[
+              {
+                title: "Foodie",
+                logo: true,
+                links: [
+                  { name: "Home", href: "#home" },
+                  { name: "Features", href: "#features" },
+                  { name: "Contact", href: "#contact" }
+                ]
+              },
+              {
+                title: "For Restaurants",
+                links: [
+                  { name: "Partner With Us", href: "#partner-restaurant" },
+                  { name: "Apps For You", app: "restaurant" }
+                ]
+              },
+              {
+                title: "For Delivery Partners",
+                links: [
+                  { name: "Become a Partner", href: "#partner-delivery" },
+                  { name: "Apps For You", app: "delivery" }
+                ]
+              },
+              {
+                title: "Learn More",
+                links: [
+                  { name: "Privacy Policy", href: "/user/profile/privacy" },
+                  { name: "Terms of Service", href: "/user/profile/terms" },
+                  { name: "Support", href: "/user/profile/support-info" }
+                ]
+              }
+            ].map((column) => (
+              <div key={column.title}>
+                {column.logo ? (
+                  <div className="h-10 flex items-center mb-5">
+                    <img src="/logo.webp" alt="Foodie" className="h-10 w-auto rounded-lg" />
+                  </div>
+                ) : (
+                  <h4 className="h-10 flex items-center font-semibold text-white text-lg mb-5">{column.title}</h4>
+                )}
+                <ul className="space-y-3.5">
+                  {column.links.map((item) => (
+                    <li key={item.name}>
+                      {item.app ? (
+                        <button type="button" onClick={() => openAppStore(item.app)} className="text-gray-400 hover:text-white transition-colors">
+                          {item.name}
+                        </button>
+                      ) : (
+                        <a href={item.href} className="text-gray-400 hover:text-white transition-colors">
+                          {item.name}
+                        </a>
+                      )}
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <p className="text-gray-400 text-sm mb-6 leading-relaxed">
-                India's smartest dining and takeaway platform. Skip the lines, discover new tastes, and dine better.
-              </p>
-              <div className="flex gap-4 relative z-30">
-                <a
-                  href="https://play.google.com/store/apps/details?id=com.foodie.user"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ cursor: 'pointer' }}
-                  className="cursor-pointer w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-gray-400 hover:bg-[#D32F2F] hover:text-white transition-all group relative z-30"
-                  title="Google Play Store"
-                >
-                  <img src="/landing/playstore-badge.webp" alt="Google Play" className="w-5 h-5 object-contain opacity-70 group-hover:opacity-100 transition-all pointer-events-none" />
-                </a>
+            ))}
+
+            {/* Contact Us + app links */}
+            <div className="col-span-2 md:col-span-1">
+              <h4 className="h-10 flex items-center font-semibold text-white text-lg mb-5">Contact Us</h4>
+              <ul className="space-y-3.5 text-gray-400 mb-6">
+                <li>Satish Singh</li>
+                <li>
+                  <a href="mailto:support@foodie.in" className="hover:text-white transition-colors">support@foodie.in</a>
+                </li>
+                <li>
+                  <a href="tel:01764511721" className="hover:text-white transition-colors">01764 511721</a>
+                </li>
+              </ul>
+              <div className="flex flex-col gap-3 relative z-30">
                 <a
                   href="https://apps.apple.com/in/app/foodie-food-delivery-takeaway/id6746978568"
                   target="_blank"
                   rel="noopener noreferrer"
-                  style={{ cursor: 'pointer' }}
-                  className="cursor-pointer w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-gray-400 hover:bg-[#D32F2F] hover:text-white transition-all relative z-30"
-                  title="Apple App Store"
+                  className="flex items-center gap-3 w-[190px] rounded-xl border border-white/30 px-4 py-2 text-white hover:border-white hover:bg-white/5 transition-all"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" fill="currentColor" className="w-5 h-5 pb-[1px] pointer-events-none">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" fill="currentColor" className="w-6 h-6 shrink-0">
                     <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z" />
                   </svg>
+                  <span className="leading-tight">
+                    <span className="block text-[10px]">Download on the</span>
+                    <span className="block text-lg font-semibold -mt-0.5">App Store</span>
+                  </span>
+                </a>
+                <a
+                  href="https://play.google.com/store/apps/details?id=com.foodie.user"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 w-[190px] rounded-xl border border-white/30 px-4 py-2 text-white hover:border-white hover:bg-white/5 transition-all"
+                >
+                  <img src="/landing/playstore-badge.webp" alt="" className="w-6 h-6 object-contain shrink-0" />
+                  <span className="leading-tight">
+                    <span className="block text-[10px] uppercase">Get it on</span>
+                    <span className="block text-lg font-semibold -mt-0.5">Google Play</span>
+                  </span>
                 </a>
               </div>
             </div>
-
-            {/* Legal */}
-            <div>
-              <h4 className="font-bold text-white mb-6 uppercase tracking-wider text-sm">Legal</h4>
-              <ul className="space-y-4">
-                {[
-                  { name: "Privacy Policy", path: "/user/profile/privacy" },
-                  { name: "Terms of Service", path: "/user/profile/terms" },
-                  { name: "Support", path: "/user/profile/support-info" }
-                ].map(item => (
-                  <li key={item.name}>
-                    <a href={item.path} className="text-gray-400 hover:text-[#D32F2F] transition-colors text-sm">
-                      {item.name}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Contact Us */}
-            <div>
-              <h4 className="font-bold text-white mb-6 uppercase tracking-wider text-sm">Contact Us</h4>
-              <ul className="space-y-4 text-sm text-gray-400">
-                <li className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white shrink-0">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
-                  </div>
-                  <span>Gurjeet Singh Virk</span>
-                </li>
-                <li className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white shrink-0">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-                  </div>
-                  <span>support@foodie.in</span>
-                </li>
-                <li className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white shrink-0">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z" /></svg>
-                  </div>
-                  <a href="tel:01764511721" className="hover:text-white transition-colors">01764 511721</a>
-                </li>
-              </ul>
-            </div>
           </div>
 
-          <div className="border-t border-white/10 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
-            <p className="text-gray-500 text-sm">
-              &copy; {new Date().getFullYear()} Foodie Technologies. All rights reserved.
+          <div className="border-t border-white/15 pt-6 text-xs text-gray-500 leading-relaxed">
+            <p>
+              By continuing past this page, you agree to our{" "}
+              <a href="/user/profile/terms" className="hover:text-white transition-colors">Terms of Service</a> and{" "}
+              <a href="/user/profile/privacy" className="hover:text-white transition-colors">Privacy Policy</a>.
             </p>
-            <div className="flex gap-4 text-sm text-gray-500">
-              <span>Made with ❤️ in India</span>
-            </div>
+            <p className="mt-1">
+              &copy; {new Date().getFullYear()} Foodie Technologies. All rights reserved. Made with ❤️ in India
+            </p>
           </div>
         </div>
       </footer>
 
     </div>
+    </MotionConfig>
   )
 }

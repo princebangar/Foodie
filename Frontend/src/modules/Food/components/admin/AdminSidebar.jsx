@@ -58,7 +58,7 @@ import { filterSidebarMenuByPermissions } from "@food/utils/subAdminPermissions"
 import { getCurrentUser } from "@food/utils/auth"
 import { adminAPI } from "@food/api"
 import { dispatchAdminNotificationsUpdated } from "@food/hooks/useAdminNotifications"
-import { brandIcon } from "@food/constants/brand"
+import { brandIcon, brandLogo } from "@food/constants/brand"
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
@@ -949,27 +949,12 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
           <div className="flex items-center justify-between mb-3">
             {!isCollapsed && (
               <div className="flex items-center gap-2 animate-[slideIn_0.3s_ease-out]">
-                <div className="w-24 h-12 rounded-lg flex items-center justify-center shadow-black/20">
-                  {logoUrl ? (
-                    <img
-                      src={logoUrl || brandIcon}
-                      alt={companyName || "Company"}
-                      className="w-24 h-10 object-contain"
-                      loading="lazy"
-                      onError={(e) => {
-                        if (e.target.src !== brandIcon) {
-                          e.target.src = brandIcon
-                        }
-                      }}
-                    />
-                  ) : companyName ? (
-                    <span className="text-xs font-semibold text-white px-2 truncate">
-                      {companyName}
-                    </span>
-                  ) : (
-                    <img src={brandIcon} alt="Company" className="w-24 h-10 object-contain" loading="lazy" />
-                  )}
-                </div>
+                <img
+                  src={brandLogo}
+                  alt={companyName || "Foodie"}
+                  className="h-12 w-auto rounded-lg object-contain shadow-lg shadow-black/20"
+                />
+
               </div>
             )}
             {isCollapsed && (
