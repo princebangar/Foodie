@@ -1,7 +1,7 @@
 ﻿import React, { useEffect, useState, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Link, useNavigate } from "react-router-dom"
-import { ArrowLeft, Phone, Loader2, X, User } from "lucide-react"
+import { ArrowLeft, ChevronRight, Phone, Loader2, X, User } from "lucide-react"
 import { toast } from "sonner"
 import { authAPI, userAPI } from "@food/api"
 import { setAuthData } from "@food/utils/auth"
@@ -34,7 +34,7 @@ const LOGIN_FONT = "'Lexend', 'Figtree', sans-serif"
 const FIELD_CLASS =
   "h-12 rounded-lg border border-[#D0D4DC] bg-white shadow-[0_1px_2px_rgba(28,28,28,0.12)] dark:border-gray-700 dark:bg-gray-900"
 const PRIMARY_BUTTON_CLASS =
-  "flex h-[52px] w-full items-center justify-center gap-2 rounded-lg bg-[#EF4F5F] text-[20px] font-normal text-white transition-colors active:bg-[#E23744]"
+  "flex h-[52px] w-full items-center justify-center gap-2 rounded-lg bg-[#E23744] text-[20px] font-normal text-white transition-colors active:bg-[#CB202D]"
 
 function IndiaFlag() {
   return (
@@ -627,9 +627,10 @@ export default function UnifiedOTPFastLogin() {
               navigate('/food/user');
             }}
             style={{ top: "calc(env(safe-area-inset-top, 0px) + 14px)" }}
-            className="absolute right-3 z-10 rounded-full bg-black/75 px-4 py-1.5 text-[15px] font-normal text-white"
+            className="absolute right-4 z-10 flex h-8 items-center gap-0.5 rounded-full border border-white/25 bg-black/40 pl-3.5 pr-2.5 text-[14px] font-medium text-white backdrop-blur-md transition-colors active:bg-black/60"
           >
             Skip
+            <ChevronRight className="h-4 w-4 opacity-80" strokeWidth={2.25} aria-hidden="true" />
           </button>
         )}
 

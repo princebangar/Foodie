@@ -11,6 +11,28 @@ const SWIPE_VELOCITY = 400
 // redraws at once while the list refreshes in the background.
 const imagesByApp = new Map()
 
+// The last list is also kept in localStorage, so on the next app open the slides
+// show at once (the images themselves come from the browser cache) instead of
+// waiting for the API. index.html reads the same key to preload the first slide.
+const storageKey = (appType) => `login_images_${appType}`
+
+const readStoredImages = (appType) => {
+  try {
+    const list = JSON.parse(localStorage.getItem(storageKey(appType)) || "[]")
+    return Array.isArray(list) ? list.filter((item) => item && typeof item.imageUrl === "string") : []
+  } catch {
+    return []
+  }
+}
+
+const storeImages = (appType, list) => {
+  try {
+    localStorage.setItem(storageKey(appType), JSON.stringify(list.map(({ _id, imageUrl }) => ({ _id, imageUrl }))))
+  } catch {
+    // storage full or blocked: the slider still works, just not instantly next time
+  }
+}
+
 /**
  * Admin-managed images for one app's login page ("user" | "restaurant" | "delivery").
  *
@@ -20,7 +42,7 @@ const imagesByApp = new Map()
  * jumps to the real slide without anyone seeing it.
  */
 export function useLoginImageSlider(appType) {
-  const [images, setImages] = useState(() => imagesByApp.get(appType) || [])
+  const [images, setImages] = useState(() => imagesByApp.get(appType) || readStoredImages(appType))
   const [position, setPosition] = useState(1)
   const [paused, setPaused] = useState(false)
   const prefersReducedMotion = useReducedMotion()
@@ -34,7 +56,14 @@ export function useLoginImageSlider(appType) {
         const list = res?.data?.data?.images
         if (!Array.isArray(list)) return
         imagesByApp.set(appType, list)
-        if (!cancelled) setImages(list)
+        storeImages(appType, list)
+        if (cancelled) return
+        // Keep the current slides (and their position) when nothing changed.
+        setImages((current) => {
+          const same =
+            current.length === list.length && current.every((item, i) => item.imageUrl === list[i].imageUrl)
+          return same ? current : list
+        })
       })
       .catch(() => {
         // The page still works without images; the slider's backdrop stays visible.
@@ -135,17 +164,9 @@ export function LoginImageSlider({ slider, height }) {
       className="absolute inset-x-0 top-0 overflow-hidden"
       style={{ height }}
     >
-      {/* Always behind the slides. The logo shows only while there are no admin
-          images, so it never peeks through a transparent slide. */}
-      <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[#B80B3D] to-[#66001D]">
-        {count === 0 && (
-          <img
-            src="/logo.webp"
-            alt="Foodie"
-            className="h-16 w-auto max-w-[70%] rounded-2xl object-contain shadow-lg"
-          />
-        )}
-      </div>
+      {/* Plain brand red behind the slides; only seen on the very first open,
+          before the admin images have ever loaded. */}
+      <div className="absolute inset-0 bg-[#E23744]" />
 
       {count > 0 && (
         <motion.div
@@ -166,6 +187,8 @@ export function LoginImageSlider({ slider, height }) {
               key={`${image._id}-${slide}`}
               src={image.imageUrl}
               alt=""
+              fetchPriority={image === images[0] ? "high" : "auto"}
+              decoding="async"
               draggable={false}
               className="h-full w-full shrink-0 select-none object-cover object-top"
               style={{ width: width || "100%" }}

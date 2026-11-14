@@ -62,6 +62,27 @@
       });
     })();
   </script>
+  <script>
+    // Login page: start loading the first slide before the app boots, using the
+    // list saved on the last visit (see LoginImageSlider.jsx).
+    (function () {
+      try {
+        var path = location.pathname;
+        var onLogin = /\/user\/auth\/login/.test(path);
+        // The app shell opens on /food/user and sends logged-out users to login.
+        var loggedOutAppStart = /^\/(food\/)?user\/?$/.test(path) && !localStorage.getItem('user_accessToken');
+        if (!onLogin && !loggedOutAppStart) return;
+        var list = JSON.parse(localStorage.getItem('login_images_user') || '[]');
+        if (!list.length || !list[0].imageUrl) return;
+        var link = document.createElement('link');
+        link.rel = 'preload';
+        link.as = 'image';
+        link.href = list[0].imageUrl;
+        link.setAttribute('fetchpriority', 'high');
+        document.head.appendChild(link);
+      } catch (e) {}
+    })();
+  </script>
   <link rel="icon" type="image/webp" href="/favicon.webp?v=2" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#D91F3A" />
