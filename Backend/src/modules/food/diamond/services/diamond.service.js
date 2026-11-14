@@ -10,6 +10,7 @@ import {
     assertRazorpayPaymentMatches,
     createRazorpayOrder,
     fetchRazorpayPayment,
+    getRazorpayInstance,
     getRazorpayKeyId,
     isRazorpayConfigured,
     verifyPaymentSignature
@@ -223,6 +224,7 @@ async function getSavingsSince(userId, since) {
 
 /** Everything the user's Diamond screens need. */
 export async function getUserDiamond(userId) {
+    await reconcilePendingDiamond(userId).catch(() => {});
     const s = normalizeSettings(await getDiamondSettingsDoc());
     const status = await getMembershipStatus(userId);
     const savings = status.isMember ? await getSavingsSince(userId, status.since) : null;
@@ -296,14 +298,19 @@ export async function verifyDiamondPayment(userId, payload = {}) {
         throw new ValidationError('Payment gateway is not configured');
     }
 
-    // A renewal starts when the current membership ends.
-    const live = await getLiveMemberships(userId);
+    await activateIntent(intent, paymentId, signature);
+    return getUserDiamond(userId);
+}
+
+/** Turns a paid pending purchase into an active membership. A renewal starts when the current one ends. */
+async function activateIntent(intent, paymentId, signature = '') {
+    const live = await getLiveMemberships(intent.userId);
     const lastEnd = live.length ? new Date(live[live.length - 1].endAt).getTime() : 0;
     const start = new Date(Math.max(Date.now(), lastEnd));
     const end = new Date(start.getTime() + intent.durationDays * DAY_MS);
 
     // Only one request can flip pending -> active.
-    await FoodDiamondMembership.updateOne(
+    const res = await FoodDiamondMembership.updateOne(
         { _id: intent._id, status: 'pending' },
         {
             $set: {
@@ -316,7 +323,45 @@ export async function verifyDiamondPayment(userId, payload = {}) {
             }
         }
     );
-    return getUserDiamond(userId);
+    return res.modifiedCount === 1;
+}
+
+const RECONCILE_WINDOW_MS = 48 * 60 * 60 * 1000;
+const reconcileCheckedAt = new Map();
+
+/**
+ * Safety net for "paid but the app closed before verify": asks Razorpay whether any of the
+ * user's recent pending Diamond orders was paid and activates it. Old unpaid ones become failed.
+ */
+export async function reconcilePendingDiamond(userId) {
+    const oid = toObjectId(userId);
+    if (!oid) return;
+    const key = String(oid);
+    if (Date.now() - (reconcileCheckedAt.get(key) || 0) < 30 * 1000) return;
+    reconcileCheckedAt.set(key, Date.now());
+
+    const cutoff = new Date(Date.now() - RECONCILE_WINDOW_MS);
+    await FoodDiamondMembership.updateMany({ userId: oid, status: 'pending', createdAt: { $lt: cutoff } }, { $set: { status: 'failed' } });
+
+    const pending = await FoodDiamondMembership.find({ userId: oid, status: 'pending', 'payment.method': 'razorpay', createdAt: { $gte: cutoff } })
+        .sort({ createdAt: 1 })
+        .limit(5)
+        .lean();
+    if (!pending.length) return;
+    const rz = getRazorpayInstance();
+    if (!rz) return;
+
+    for (const intent of pending) {
+        try {
+            const res = await rz.orders.fetchPayments(intent.payment.razorpayOrderId);
+            const paid = (res?.items || []).find(
+                (p) => ['captured', 'authorized'].includes(p.status) && Number(p.amount) === Math.round(intent.amount * 100)
+            );
+            if (paid) await activateIntent(intent, paid.id);
+        } catch {
+            // Razorpay unreachable: try again on the next visit.
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

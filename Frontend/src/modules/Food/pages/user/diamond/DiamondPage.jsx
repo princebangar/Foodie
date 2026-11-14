@@ -136,7 +136,9 @@ export default function DiamondPage() {
   const membership = data?.membership
   const savings = data?.savings
   const isMember = Boolean(membership?.isMember)
-  const canBuy = !isMember && plan?.enabled && plan?.price > 0
+  // Members can renew in the last week; the new period starts when the current one ends.
+  const canRenew = isMember && membership?.daysLeft <= 7
+  const canBuy = (!isMember || canRenew) && plan?.enabled && plan?.price > 0
 
   const handleJoin = async () => {
     if (paying) return
@@ -179,7 +181,7 @@ export default function DiamondPage() {
             setCachedDiamond(next)
             setData(next)
             window.scrollTo({ top: 0, behavior: "smooth" })
-            toast.success("Welcome to Foodie Diamond")
+            toast.success(isMember ? "Diamond renewed" : "Welcome to Foodie Diamond")
           } catch (error) {
             toast.error(error?.response?.data?.message || "Payment verification failed. Please contact support.")
           } finally {
@@ -350,9 +352,9 @@ export default function DiamondPage() {
             style={{ backgroundImage: DIAMOND_BUTTON }}
           >
             {paying ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
-            {paying ? "Opening payment…" : `Join Diamond for ${formatINR(plan.price)}`}
+            {paying ? "Opening payment…" : `${canRenew ? "Renew Diamond" : "Join Diamond"} for ${formatINR(plan.price)}`}
           </button>
-          <p className="mt-2 text-center text-[12px] text-gray-500">Valid for {plan.durationLabel} from the day you join</p>
+          <p className="mt-2 text-center text-[12px] text-gray-500">{canRenew ? `Adds ${plan.durationLabel} after your current membership ends` : `Valid for ${plan.durationLabel} from the day you join`}</p>
         </motion.div>
       )}
     </div>

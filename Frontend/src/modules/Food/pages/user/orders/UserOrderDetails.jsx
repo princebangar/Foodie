@@ -223,9 +223,12 @@ export default function UserOrderDetails() {
     return "";
   })();
 
+  // `discount` already includes the Diamond extra off; add the fees Diamond waived.
   const savings =
     (pricing.discount || 0) +
     (pricing.bogoSavings || 0) +
+    (pricing.diamondSavings?.delivery || 0) +
+    (pricing.diamondSavings?.platformFee || 0) +
     (pricing.originalItemTotal || 0) -
     (pricing.subtotal || 0)
 

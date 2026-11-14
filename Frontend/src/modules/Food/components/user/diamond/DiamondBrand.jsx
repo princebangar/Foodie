@@ -3,6 +3,8 @@
  * wordmark and accents (the counterpart of Zomato Gold's bronze).
  */
 
+import foodieWordmark from "@food/assets/diamond/foodie-wordmark-white.webp"
+
 export const DIAMOND_BG = "#0B0E13"
 export const DIAMOND_CARD = "#161B22"
 export const DIAMOND_ICE = "#9EE6FF"
@@ -60,10 +62,16 @@ export function DiamondWordmark({ size = "lg" }) {
   const ring = big ? "h-[50px] w-[50px] min-[380px]:h-[56px] min-[380px]:w-[56px] mx-0.5" : "h-[27px] w-[27px] mx-px"
   return (
     <div className="flex flex-col items-center select-none" style={{ fontFamily: DIAMOND_FONT }}>
-      <span className={`${big ? "text-[30px]" : "text-[16px]"} font-extrabold tracking-tight text-white leading-none`}>
-        Foodie
-      </span>
-      <span className={`${letters} mt-1 flex items-center font-black leading-none tracking-[-0.02em]`}>
+      {/* Foodie brand wordmark (from the logo, white, without the smile), like "zomato" above GOLD */}
+      <img
+        src={foodieWordmark}
+        alt="Foodie"
+        draggable={false}
+        className={big ? "h-[52px] w-auto" : "h-[27px] w-auto"}
+        width={720}
+        height={232}
+      />
+      <span className={`${letters} ${big ? "mt-1.5" : "mt-1"} flex items-center font-black leading-none tracking-[-0.02em]`}>
         <span style={diamondTextStyle}>DIAM</span>
         <span
           className={`${ring} inline-flex shrink-0 items-center justify-center rounded-full`}
