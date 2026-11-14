@@ -23,7 +23,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts"
-import { Activity, ArrowUpRight, ShoppingBag, CreditCard, Truck, Receipt, DollarSign, Store, UserCheck, Package, UserCircle, Clock, CheckCircle, Plus, XCircle, IndianRupee } from "lucide-react"
+import { Activity, ArrowUpRight, ShoppingBag, CreditCard, Truck, Receipt, DollarSign, Store, UserCheck, Package, UserCircle, Clock, CheckCircle, Plus, XCircle, IndianRupee, Headphones } from "lucide-react"
 import { adminAPI } from "@food/api"
 const debugLog = () => {}
 const debugError = () => {}
@@ -147,6 +147,17 @@ export default function AdminHome() {
   const cashOrdersTotal = dashboardData?.cod?.cashOrders || 0
   const onlineOrdersTotal = dashboardData?.cod?.onlineOrders || 0
   const cancelledOrdersTotal = dashboardData?.orders?.byStatus?.cancelled || 0
+  const takeawayOrdersTotal = dashboardData?.takeawayOrders?.total || 0
+  const openSupportTickets = dashboardData?.supportTickets?.open || 0
+  const openUserRestaurantTickets =
+    (dashboardData?.supportTickets?.openUser || 0) + (dashboardData?.supportTickets?.openRestaurant || 0)
+  const openDeliveryTickets = dashboardData?.supportTickets?.openDelivery || 0
+  // User + restaurant tickets and delivery tickets live on two separate admin pages;
+  // open the delivery page only when that's the only place with open tickets.
+  const supportTicketsPath =
+    openUserRestaurantTickets === 0 && openDeliveryTickets > 0
+      ? "/admin/food/delivery-support-tickets"
+      : "/admin/food/support-tickets"
   const deliveryBoyEarningTotal =
     dashboardData?.deliveryBoyEarning ?? dashboardData?.riderEarnings?.total ?? 0
   const restaurantEarningTotal = dashboardData?.restaurantEarning || 0
@@ -429,6 +440,24 @@ export default function AdminHome() {
               icon={<Store className="h-5 w-5 text-lime-600" />}
               accent="bg-lime-200/40"
               path="/admin/food/transaction-report"
+              loading={isLoading}
+            />
+            <MetricCard
+              title="Takeaway Orders"
+              value={takeawayOrdersTotal.toLocaleString("en-IN")}
+              helper={`${periodLabel} takeaway orders`}
+              icon={<ShoppingBag className="h-5 w-5 text-orange-600" />}
+              accent="bg-orange-200/40"
+              path="/admin/food/orders/all"
+              loading={isLoading}
+            />
+            <MetricCard
+              title="Open Support Tickets"
+              value={openSupportTickets.toLocaleString("en-IN")}
+              helper={`User & restaurant: ${openUserRestaurantTickets} · Delivery: ${openDeliveryTickets}`}
+              icon={<Headphones className="h-5 w-5 text-fuchsia-600" />}
+              accent="bg-fuchsia-200/40"
+              path={supportTicketsPath}
               loading={isLoading}
             />
           </div>

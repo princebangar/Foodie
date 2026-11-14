@@ -177,16 +177,34 @@ export default function AdminLayout() {
           return true; // Already has back button, stop
         }
 
-        // Enforce flex layout and alignment on container
-        container.style.display = "flex";
-        container.style.alignItems = "center";
-        
-        // Ensure flex layout handles children spacing
-        Array.from(container.children).forEach(child => {
-          if (child.tagName === 'SVG' || child.tagName === 'svg' || child.classList.contains('lucide')) {
-            child.style.marginRight = "0px";
-          }
-        });
+        // A block container holding the h1 plus a subtitle (title stacked over a description)
+        // must stay stacked; turning it into a flex row puts the subtitle beside the title.
+        const contentChildren = Array.from(container.children)
+        const isStackedHeader =
+          container === h1.parentNode &&
+          contentChildren.length > 1 &&
+          window.getComputedStyle(container).display !== "flex"
+
+        if (isStackedHeader) {
+          // Grid: back button in column 1 spanning every row, title + subtitle stacked in column 2
+          container.style.display = "grid";
+          container.style.gridTemplateColumns = "auto minmax(0, 1fr)";
+          container.style.alignItems = "center";
+          contentChildren.forEach((child) => {
+            child.style.gridColumn = "2";
+          });
+        } else {
+          // Enforce flex layout and alignment on container
+          container.style.display = "flex";
+          container.style.alignItems = "center";
+
+          // Ensure flex layout handles children spacing
+          contentChildren.forEach(child => {
+            if (child.tagName === 'SVG' || child.tagName === 'svg' || child.classList.contains('lucide')) {
+              child.style.marginRight = "0px";
+            }
+          });
+        }
 
         // Create the vanilla button element
         const btn = document.createElement("button");
@@ -194,6 +212,11 @@ export default function AdminLayout() {
         btn.title = "Go Back";
         btn.onclick = handleBackClick;
         btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-left w-4 h-4 transition-transform duration-200 group-hover:-translate-x-0.5"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>`;
+
+        if (isStackedHeader) {
+          btn.style.gridColumn = "1";
+          btn.style.gridRow = `1 / span ${contentChildren.length}`;
+        }
 
         // Insert at the beginning of the container
         container.insertBefore(btn, container.firstChild);

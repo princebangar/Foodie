@@ -540,7 +540,10 @@ export async function getDashboardStats(query = {}) {
         recentPendingOrders,
         recentDeliveredOrders,
         recentCancelledOrders,
-        recentCustomers
+        recentCustomers,
+        openUserTickets,
+        openRestaurantTickets,
+        openDeliveryTickets
     ] = await Promise.all([
         FoodOrder.aggregate([
             { $match: orderMatch },
@@ -682,6 +685,11 @@ export async function getDashboardStats(query = {}) {
                     cashOrderCount: {
                         $sum: {
                             $cond: [IS_CASH_COD_METHOD_EXPR, 1, 0]
+                        }
+                    },
+                    takeawayOrderCount: {
+                        $sum: {
+                            $cond: [{ $eq: ['$orderType', 'takeaway'] }, 1, 0]
                         }
                     },
                     onlineOrderCount: {
@@ -831,7 +839,11 @@ export async function getDashboardStats(query = {}) {
                     }
                 }
             ])
-            : FoodUser.find({ role: 'USER', name: { $regex: /\S/ } }).sort({ createdAt: -1 }).limit(5).select('name createdAt').lean()
+            : FoodUser.find({ role: 'USER', name: { $regex: /\S/ } }).sort({ createdAt: -1 }).limit(5).select('name createdAt').lean(),
+        // Open support tickets are a live queue, so they ignore the period/zone filters.
+        FoodSupportTicket.countDocuments({ status: 'open' }),
+        FoodRestaurantSupportTicket.countDocuments({ status: 'open' }),
+        DeliverySupportTicket.countDocuments({ status: 'open' })
     ]);
 
     const liveSignals = [];
@@ -970,6 +982,13 @@ export async function getDashboardStats(query = {}) {
             openOrders: Number(totals.codOpenOrders || 0),
             cashOrders: Number(totals.cashOrderCount || 0),
             onlineOrders: Number(totals.onlineOrderCount || 0)
+        },
+        takeawayOrders: { total: Number(totals.takeawayOrderCount || 0) },
+        supportTickets: {
+            open: Number(openUserTickets || 0) + Number(openRestaurantTickets || 0) + Number(openDeliveryTickets || 0),
+            openUser: Number(openUserTickets || 0),
+            openRestaurant: Number(openRestaurantTickets || 0),
+            openDelivery: Number(openDeliveryTickets || 0)
         },
         commission: { total: commissionTotal },
         platformFee: { total: platformFeeTotal },

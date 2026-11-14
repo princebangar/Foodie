@@ -948,13 +948,15 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
         <div className="shrink-0 px-3 py-3 border-b border-neutral-800/60 bg-neutral-900 animate-[fadeIn_0.4s_ease-out]">
           <div className="flex items-center justify-between mb-3">
             {!isCollapsed && (
-              <div className="flex items-center gap-2 animate-[slideIn_0.3s_ease-out]">
+              <div className="flex items-center gap-3 min-w-0 animate-[slideIn_0.3s_ease-out]">
                 <img
                   src={brandLogo}
                   alt={companyName || "Foodie"}
-                  className="h-12 w-auto rounded-lg object-contain shadow-lg shadow-black/20"
+                  className="h-12 w-auto shrink-0 rounded-lg object-contain shadow-lg shadow-black/20"
                 />
-
+                <h2 className="text-sm font-semibold text-neutral-300 uppercase tracking-wider whitespace-nowrap">
+                  Admin Panel
+                </h2>
               </div>
             )}
             {isCollapsed && (
@@ -998,15 +1000,6 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
               </button>
             </div>
           </div>
-
-          {/* Admin Panel Label */}
-          {!isCollapsed && (
-            <div className="mb-3 animate-[slideIn_0.4s_ease-out_0.1s_both]">
-              <h2 className="text-sm font-semibold text-neutral-300 uppercase tracking-wider text-left">
-                Admin Panel
-              </h2>
-            </div>
-          )}
 
           {/* Search Bar */}
           {!isCollapsed && (
