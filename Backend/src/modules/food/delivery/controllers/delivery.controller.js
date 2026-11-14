@@ -5,7 +5,7 @@ import { getDeliveryCashLimitSettings, getDeliveryEmergencyHelp } from '../../ad
 import { DeliveryBonusTransaction } from '../../admin/models/deliveryBonusTransaction.model.js';
 import { validateDeliveryRegisterDto, validateDeliveryProfileUpdateDto, validateDeliveryBankDetailsDto } from '../validators/delivery.validator.js';
 import { sendResponse } from '../../../../utils/response.js';
-import { getDeliveryReferralStats } from '../services/deliveryReferral.service.js';
+import { getDeliveryReferralStats, getDeliveryReferralDetails, getDeliveryReferralInvite } from '../services/deliveryReferral.service.js';
 import { signPendingApprovalToken } from '../../../../core/auth/auth.service.js';
 
 export const registerDeliveryPartnerController = async (req, res, next) => {
@@ -304,6 +304,25 @@ export const getDeliveryReferralStatsController = async (req, res, next) => {
         const deliveryPartnerId = req.user?.userId;
         const stats = await getDeliveryReferralStats(deliveryPartnerId);
         return sendResponse(res, 200, 'Referral stats fetched successfully', { stats });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/** Public: data for the /join/:code invite page. */
+export const getDeliveryReferralInviteController = async (req, res, next) => {
+    try {
+        const invite = await getDeliveryReferralInvite(req.params.code);
+        return sendResponse(res, 200, 'Referral invite fetched successfully', invite);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getDeliveryReferralDetailsController = async (req, res, next) => {
+    try {
+        const details = await getDeliveryReferralDetails(req.user?.userId);
+        return sendResponse(res, 200, 'Referral details fetched successfully', details);
     } catch (error) {
         next(error);
     }

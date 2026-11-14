@@ -11,6 +11,8 @@ const referralLogSchema = new mongoose.Schema(
             index: true
         },
         rewardAmount: { type: Number, required: true, min: 0, default: 0 },
+        // Which referral this was for the referrer (1 = first). Drives tiered delivery rewards.
+        referralNumber: { type: Number, min: 0, default: 0 },
         status: {
             type: String,
             enum: ['pending', 'credited', 'rejected'],

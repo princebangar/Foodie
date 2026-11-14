@@ -55,6 +55,11 @@ const CUSTOMIZATION_TOGGLES = [
         description: 'When enabled, user / restaurant / delivery apps show Under Maintenance (admin stays available)'
     },
     {
+        key: 'delivery_refer_earn_enabled',
+        defaultValue: true,
+        description: 'Shows Refer & Earn in the delivery partner app. When OFF it is hidden and no referral rewards are credited.'
+    },
+    {
         key: 'driver_simulation_enabled',
         defaultValue: false,
         description: 'Testing only: shows the route simulation button on the rider app feed (fakes rider movement). Keep OFF on live.'

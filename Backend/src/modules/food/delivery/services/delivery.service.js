@@ -9,6 +9,7 @@ import { releaseStoredAssets } from '../../../../services/assetCleanup.service.j
 import { ValidationError } from '../../../../core/auth/errors.js';
 import { getDeliveryCashLimitSettings } from '../../admin/services/admin.service.js';
 import { logger } from '../../../../utils/logger.js';
+import { resolveDeliveryReferrer } from './deliveryReferral.service.js';
 import {
   toStartOfDayInTimeZone,
   toEndOfDayInTimeZone,
@@ -208,10 +209,16 @@ export const registerDeliveryPartner = async (payload, files) => {
     }
 
     // Store referredBy (no credit here; credit happens on admin approval).
-    if (refRaw && mongoose.Types.ObjectId.isValid(refRaw) && String(refRaw) !== String(partner._id)) {
-        const referrer = await FoodDeliveryPartner.findById(refRaw).select('_id').lean();
-        if (referrer) {
-            postCreateSet.referredBy = referrer._id;
+    // `ref` can be the referrer's id (share link) or their Delivery ID code (DP-XXXXXXXX).
+    if (refRaw) {
+        try {
+            const referrer = await resolveDeliveryReferrer(refRaw);
+            if (referrer && String(referrer._id) !== String(partner._id)) {
+                postCreateSet.referredBy = referrer._id;
+            }
+        } catch (err) {
+            // A bad referral code must never block registration.
+            logger?.warn?.({ err }, 'Delivery referral code lookup failed');
         }
     }
 

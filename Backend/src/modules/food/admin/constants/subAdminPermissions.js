@@ -37,6 +37,7 @@ export const SUB_ADMIN_PERMISSION_MODULES = [
   { key: 'delivery_boy_payout', label: 'Delivery Boy Payout', pathPrefixes: ['/admin/food/delivery-boy-commission'] },
   { key: 'delivery_emergency_help', label: 'Delivery Emergency Help', pathPrefixes: ['/admin/food/delivery-emergency-help'] },
   { key: 'delivery_support_tickets', label: 'Delivery Support Tickets', pathPrefixes: ['/admin/food/delivery-support-tickets'] },
+  { key: 'delivery_referral', label: 'Delivery Boy Refer & Earn', pathPrefixes: ['/admin/food/delivery-referral'] },
   { key: 'deliveryman_join_request', label: 'New Join Request', pathPrefixes: ['/admin/food/delivery-partners/join-request'] },
   { key: 'deliveryman_list', label: 'Deliveryman List', pathPrefixes: ['/admin/food/delivery-partners'] },
   { key: 'deliveryman_reviews', label: 'Deliveryman Reviews', pathPrefixes: ['/admin/food/delivery-partners/reviews'] },

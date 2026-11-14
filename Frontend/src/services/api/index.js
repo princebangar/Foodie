@@ -1035,6 +1035,14 @@ export const adminAPI = {
       contextModule: "admin",
     }),
 
+  /** Delivery Boy Refer & Earn (admin) */
+  getDeliveryReferralSettings: () =>
+    apiClient.get("/food/admin/delivery-referral/settings", { contextModule: "admin" }),
+  saveDeliveryReferralSettings: (body) =>
+    apiClient.put("/food/admin/delivery-referral/settings", body ?? {}, { contextModule: "admin" }),
+  getDeliveryReferrals: (params) =>
+    apiClient.get("/food/admin/delivery-referral/referrals", { params, contextModule: "admin" }),
+
   /** Safety / Emergency Reports (admin) */
   getSafetyEmergencyReports: (params) =>
     apiClient.get("/food/admin/safety-emergency-reports", {
@@ -2057,6 +2065,14 @@ export const deliveryAPI = {
     apiClient.get("/food/delivery/referrals/stats", {
       contextModule: "delivery",
     }),
+  /** GET /food/delivery/referrals/details - code, share link, reward ladder, stats and invited partners */
+  getReferralDetails: () =>
+    apiClient.get("/food/delivery/referrals/details", {
+      contextModule: "delivery",
+    }),
+  /** GET /food/delivery/referrals/invite/:code - public, for the /join/:code invite page */
+  getReferralInvite: (code) =>
+    apiClient.get(`/food/delivery/referrals/invite/${encodeURIComponent(code)}`),
   logout: (refreshToken) => {
     deliveryMeCached = null;
     deliveryMeCacheTime = 0;

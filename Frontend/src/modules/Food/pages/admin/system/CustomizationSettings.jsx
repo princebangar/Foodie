@@ -11,77 +11,84 @@ const CUSTOMIZATION_TOGGLES = [
     key: "cod_enabled",
     label: "Global COD",
     description:
-      "Global toggle for COD visibility (Applies to Delivery/Dining, NOT Takeaway).",
+      "COD for delivery and dining orders (not takeaway).",
     defaultValue: true,
   },
   {
     key: "takeaway_cod_enabled",
     label: "Takeaway COD",
     description:
-      "Controls Cash on Delivery (COD) visibility for takeaway orders.",
+      "COD for takeaway orders.",
     defaultValue: true,
   },
   {
     key: "delivery_cod_enabled",
     label: "Delivery COD",
     description:
-      "Controls Cash on Delivery (COD) visibility for delivery orders.",
+      "COD for delivery orders.",
     defaultValue: true,
   },
   {
     key: "dining_cod_enabled",
     label: "Dining COD",
     description:
-      "Controls Cash on Delivery (COD) visibility for dining orders.",
+      "COD for dining orders.",
     defaultValue: true,
   },
   {
     key: "wallet_payment_enabled",
     label: "Wallet Payment",
     description:
-      "Controls visibility of wallet payment method at checkout.",
+      "Wallet payment option at checkout.",
     defaultValue: true,
   },
   {
     key: "online_payment_enabled",
     label: "Online Payment",
     description:
-      "Controls visibility of Razorpay online payment at checkout.",
+      "Razorpay online payment at checkout.",
     defaultValue: true,
   },
   {
     key: "default_location_enabled",
     label: "Default Location Mode",
     description:
-      "Bypasses device location permissions and sets default location to Indore for all users.",
+      "Skips location permission and uses Indore for all users.",
     defaultValue: false,
   },
   {
     key: "cod_blocking_feature_enabled",
     label: "Global COD Blocked",
     description:
-      "Global toggle to enable/disable the automatic COD blocking feature (blocks COD for users with 4 consecutive COD cancellations).",
+      "Blocks COD for users after 4 COD cancellations in a row.",
     defaultValue: true,
   },
   {
     key: "combo_offers_enabled",
     label: "Combo Offers",
     description:
-      "Shows the Combo Offers slider on the user home page and the Combo Offers chip on restaurant pages. When OFF, both are hidden for users; the admin Combo Offers list stays as it is.",
+      "Shows Combo Offers on the user home page and restaurant pages.",
     defaultValue: true,
   },
   {
     key: "maintenance_mode_enabled",
     label: "Under Maintenance",
     description:
-      "When ON, user / restaurant / delivery apps show the Under Maintenance screen. Admin panel stays available. Default is OFF.",
+      "Shows the maintenance screen in user, restaurant and delivery apps.",
     defaultValue: false,
+  },
+  {
+    key: "delivery_refer_earn_enabled",
+    label: "Delivery Refer & Earn",
+    description:
+      "Shows Refer & Earn in the delivery app. When OFF, it is hidden and no rewards are paid.",
+    defaultValue: true,
   },
   {
     key: "driver_simulation_enabled",
     label: "Testing simulation for driver",
     description:
-      "Testing only. When ON, the rider app feed shows the simulation (play) button that moves the rider along the route automatically. Keep OFF on live. Default is OFF.",
+      "Testing only: shows the route simulation button on the rider feed. Keep OFF on live.",
     defaultValue: false,
   },
 ];

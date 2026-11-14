@@ -983,7 +983,9 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="fixed inset-x-0 top-0 bottom-[92px] z-[300] pointer-events-none flex items-end"
+              className="fixed inset-x-0 top-0 z-[300] pointer-events-none flex items-end"
+              // Follow the bottom nav, which moves up by the safe-area inset on phones with a gesture bar.
+              style={{ bottom: 'calc(92px + env(safe-area-inset-bottom, 0px))' }}
             >
               <div className="w-full pointer-events-auto relative">
                 {(tripStatus === 'PICKING_UP' || tripStatus === 'REACHED_PICKUP') && (
@@ -1259,7 +1261,9 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
         <motion.div 
            initial={{ y: 100, opacity: 0 }}
            animate={{ y: 0, opacity: 1 }}
-           className="fixed bottom-[100px] inset-x-0 z-[300] px-6"
+           className="fixed inset-x-0 z-[300] px-6"
+           // Bottom nav sits at 24px + safe area and is 72px tall; keep a 12px gap above it on every device.
+           style={{ bottom: 'calc(108px + env(safe-area-inset-bottom, 0px))' }}
         >
            <button 
              onClick={() => setIsModalMinimized(false)}

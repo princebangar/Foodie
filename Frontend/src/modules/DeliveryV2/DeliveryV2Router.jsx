@@ -34,11 +34,17 @@ import TermsAndConditionsV2 from './pages/TermsAndConditionsV2';
 import PrivacyPolicyV2 from './pages/PrivacyPolicyV2';
 import DeliveryCMSHelpSupportPage from './pages/CMSHelpSupportPage';
 import NotificationsV2 from './pages/NotificationsV2';
+import { captureDeliveryReferralFromSearch } from './utils/deliveryReferral';
+
+const ReferEarnV2 = lazy(() => import('./pages/profile/ReferEarnV2'));
 
 
 
 const DeliveryV2Router = () => {
   const navigate = useNavigate();
+
+  // Read ?ref= on the first render, before /signup redirects to /login and drops the query string.
+  React.useState(() => captureDeliveryReferralFromSearch(window.location.search));
 
   React.useEffect(() => {
     const handleAuthFailure = (e) => {
@@ -97,6 +103,7 @@ const DeliveryV2Router = () => {
           <Route path="profile/reviews" element={<MyReviewsV2 />} />
           <Route path="profile/bank" element={<ProfileBankV2 />} />
           <Route path="profile/documents" element={<ProfileDocsV2 />} />
+          <Route path="profile/refer" element={<ReferEarnV2 />} />
           
           {/* Support Systems */}
           <Route path="help/tickets" element={<SupportTicketsV2 />} />

@@ -25,6 +25,7 @@ import { FoodTopRestaurant } from '../models/topRestaurant.model.js';
 import { FoodDeliveryEmergencyHelp } from '../models/deliveryEmergencyHelp.model.js';
 import { FoodReferralSettings } from '../models/referralSettings.model.js';
 import { FoodReferralLog } from '../models/referralLog.model.js';
+import { creditDeliveryReferralOnApproval } from '../../delivery/services/deliveryReferral.service.js';
 import { FoodSafetyEmergencyReport } from '../models/safetyEmergencyReport.model.js';
 import { FoodAddon } from '../../restaurant/models/foodAddon.model.js';
 import { FoodSupportTicket } from '../../user/models/supportTicket.model.js';
@@ -5755,45 +5756,10 @@ export async function approveDeliveryPartner(id) {
 
     await sendDeliveryApprovalNotifications(updated, existing, isChangesApproval);
 
-    // Referral crediting: on approval, credit the referrer partner's pocket balance via DeliveryBonusTransaction.
+    // Referral crediting: on approval, credit the referrer the reward for their next referral
+    // slot (tiered amounts from Delivery Boy Refer & Earn settings) into pocket balance.
     try {
-        const referrerId = updated.referredBy ? String(updated.referredBy) : '';
-        if (referrerId && mongoose.Types.ObjectId.isValid(referrerId)) {
-            const already = await FoodReferralLog.findOne({ refereeId: updated._id, role: 'DELIVERY_PARTNER' }).lean();
-            if (!already) {
-                const settingsDoc = await FoodReferralSettings.findOne({ isActive: true }).sort({ createdAt: -1 }).lean();
-                const reward = Math.max(0, Number(settingsDoc?.referralRewardDelivery) || 0);
-                const limit = Math.max(0, Number(settingsDoc?.referralLimitDelivery) || 0);
-                const referrer = await FoodDeliveryPartner.findById(referrerId).select('_id referralCount status').lean();
-
-                if (referrer && referrer.status === 'approved' && reward > 0 && limit > 0 && Number(referrer.referralCount || 0) < limit) {
-                    const log = await FoodReferralLog.create({
-                        referrerId: referrer._id,
-                        refereeId: updated._id,
-                        role: 'DELIVERY_PARTNER',
-                        rewardAmount: reward,
-                        status: 'credited'
-                    });
-
-                    await Promise.all([
-                        FoodDeliveryPartner.updateOne({ _id: referrer._id }, { $inc: { referralCount: 1 } }),
-                        addDeliveryPartnerBonus(
-                            { deliveryPartnerId: String(referrer._id), amount: reward, reference: 'Referral bonus' },
-                            null
-                        )
-                    ]);
-                } else {
-                    await FoodReferralLog.create({
-                        referrerId: new mongoose.Types.ObjectId(referrerId),
-                        refereeId: updated._id,
-                        role: 'DELIVERY_PARTNER',
-                        rewardAmount: reward,
-                        status: 'rejected',
-                        reason: !referrer ? 'referrer_not_found' : reward <= 0 ? 'reward_disabled' : limit <= 0 ? 'limit_disabled' : 'limit_reached'
-                    });
-                }
-            }
-        }
+        await creditDeliveryReferralOnApproval(updated, { addBonus: addDeliveryPartnerBonus });
     } catch (e) {
         // Never fail approval due to referral errors.
         // eslint-disable-next-line no-console

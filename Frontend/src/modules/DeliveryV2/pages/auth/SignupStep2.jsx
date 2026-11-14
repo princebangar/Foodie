@@ -1,3 +1,4 @@
+import { clearStoredDeliveryReferral } from "../../utils/deliveryReferral"
 import { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { ArrowLeft, Upload, X, Check, Camera, Image as ImageIcon } from "lucide-react"
@@ -267,6 +268,7 @@ export default function SignupStep2() {
 
       if (response?.data?.success) {
         sessionStorage.removeItem("deliverySignupDetails")
+        clearStoredDeliveryReferral()
         sessionStorage.removeItem("deliverySignupDocs")
         await clearSignupDocumentsFromDB()
         if (shouldRegister) {

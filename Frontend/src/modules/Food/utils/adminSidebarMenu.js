@@ -160,6 +160,7 @@ export const adminSidebarMenu = [
       { type: "link", label: "Delivery Boy Payout", path: "/admin/food/delivery-boy-commission", icon: "DollarSign" },
       { type: "link", label: "Delivery Emergency Help", path: "/admin/food/delivery-emergency-help", icon: "Phone" },
       { type: "link", label: "Delivery Support Tickets", path: "/admin/food/delivery-support-tickets", icon: "MessageSquare" },
+      { type: "link", label: "Delivery Boy Refer & Earn", path: "/admin/food/delivery-referral", icon: "Gift" },
       {
         type: "expandable",
         label: "Deliveryman",

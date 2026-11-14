@@ -87,6 +87,7 @@ const RedirectToFood = () => {
 
 const MasterLandingPage = lazy(() => import('./MasterLandingPage'))
 const GetAppPage = lazy(() => import('./landing/GetAppPage'))
+const DeliveryInvitePage = lazy(() => import('./landing/DeliveryInvitePage'))
 const AdminRouter = lazy(() => import('../modules/Food/components/admin/AdminRouter'))
 
 const AppRoutes = () => {
@@ -142,6 +143,9 @@ const AppRoutes = () => {
 
           {/* QR code target: sends phones to the right app store */}
           <Route path="/get-app" element={<GetAppPage />} />
+
+          {/* Delivery partner invite link: /join/DP-XXXXXXXX */}
+          <Route path="/join/:code" element={<DeliveryInvitePage />} />
 
           {/* Handle root and other paths via FoodAppWrapper */}
           <Route path="/*" element={<FoodAppWrapper />} />

@@ -6,7 +6,11 @@ const referralSettingsSchema = new mongoose.Schema(
         referralRewardDelivery: { type: Number, min: 0, default: 0 },
         referralLimitUser: { type: Number, min: 0, default: 0 },
         referralLimitDelivery: { type: Number, min: 0, default: 0 },
-        isActive: { type: Boolean, default: true, index: true }
+        // Delivery partner refer & earn: master switch + per-referral rewards.
+        // deliveryReferralTiers[i] is the reward for the (i + 1)th successful referral;
+        // referrals after the last tier (up to referralLimitDelivery) pay referralRewardDelivery.
+        deliveryReferralEnabled: { type: Boolean, default: true },
+        deliveryReferralTiers: { type: [Number], default: [] },        isActive: { type: Boolean, default: true, index: true }
     },
     { collection: 'food_referral_settings', timestamps: true }
 );

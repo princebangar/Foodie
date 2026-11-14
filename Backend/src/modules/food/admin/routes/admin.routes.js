@@ -22,6 +22,7 @@ import { enforceSubAdminPermissions } from '../middleware/subAdminPermission.mid
 import * as otherPriceController from '../controllers/otherPrice.controller.js';
 import * as comboOfferController from '../controllers/comboOffer.controller.js';
 import * as bogoOfferController from '../controllers/bogoOffer.controller.js';
+import * as deliveryReferralController from '../controllers/deliveryReferral.controller.js';
 
 const router = express.Router();
 
@@ -191,6 +192,11 @@ router.put('/fee-settings', adminController.createOrUpdateFeeSettings);
 // ----- Referral Settings -----
 router.get('/referral-settings', adminController.getReferralSettings);
 router.put('/referral-settings', adminController.createOrUpdateReferralSettings);
+
+// ----- Delivery Boy Refer & Earn -----
+router.get('/delivery-referral/settings', deliveryReferralController.getDeliveryReferralSettingsController);
+router.put('/delivery-referral/settings', deliveryReferralController.saveDeliveryReferralSettingsController);
+router.get('/delivery-referral/referrals', deliveryReferralController.listDeliveryReferralsController);
 
 // ----- Business Settings -----
 router.get('/business-settings/public', businessSettingsController.getBusinessSettings); // Public endpoint

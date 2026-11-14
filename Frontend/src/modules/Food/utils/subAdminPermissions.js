@@ -54,6 +54,7 @@ const STABLE_KEYS_BY_PATH = {
   "/admin/food/delivery-boy-commission": "delivery_boy_payout",
   "/admin/food/delivery-emergency-help": "delivery_emergency_help",
   "/admin/food/delivery-support-tickets": "delivery_support_tickets",
+  "/admin/food/delivery-referral": "delivery_referral",
   "/admin/food/delivery-partners/join-request": "deliveryman_join_request",
   "/admin/food/delivery-partners": "deliveryman_list",
   "/admin/food/delivery-partners/reviews": "deliveryman_reviews",

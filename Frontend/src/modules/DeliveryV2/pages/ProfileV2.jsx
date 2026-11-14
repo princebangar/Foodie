@@ -6,7 +6,7 @@ import {
   Bike,
   Ticket,
   Star,
-  Share2,
+  Gift,
   LogOut,
   X,
   Briefcase,
@@ -28,7 +28,7 @@ export const ProfileV2 = () => {
   const location = useLocation()
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [referralReward, setReferralReward] = useState(0)
+  const [referralStats, setReferralStats] = useState(null)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [logoutSubmitting, setLogoutSubmitting] = useState(false)
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false)
@@ -71,27 +71,9 @@ export const ProfileV2 = () => {
 
   useEffect(() => {
     deliveryAPI.getReferralStats().then((res) => {
-      const reward = res?.data?.data?.stats?.rewardAmount
-      setReferralReward(Number(reward) || 0)
+      setReferralStats(res?.data?.data?.stats || null)
     }).catch(() => {})
   }, [])
-
-  const refId = profile?._id || profile?.id || profile?.referralCode || ""
-  const referralLink = refId ? `${window.location.origin}/food/delivery/signup?ref=${encodeURIComponent(String(refId))}` : ""
-
-  const handleShareReferral = async () => {
-    if (!referralLink) return
-    const rewardText = referralReward > 0 ? `₹${referralReward}` : "rewards"
-    const shareText = `Join as a delivery partner and earn ${rewardText}.`
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: "Delivery referral", text: shareText, url: referralLink })
-      } else {
-        const fallbackUrl = `https://wa.me/?text=${encodeURIComponent(`${shareText} ${referralLink}`)}`
-        window.open(fallbackUrl, "_blank", "noopener,noreferrer")
-      }
-    } catch (e) {}
-  }
 
   const handleLogout = async () => {
     if (logoutSubmitting) return
@@ -178,6 +160,30 @@ export const ProfileV2 = () => {
             <span className="text-sm font-bold text-gray-900">My reviews</span>
           </button>
         </div>
+
+        {/* Refer & Earn banner (hidden when admin turns off Delivery Refer & Earn) */}
+        {referralStats?.visible && (
+        <button
+          type="button"
+          onClick={() => navigate("/food/delivery/profile/refer")}
+          className="w-full text-left bg-white rounded-xl p-4 mb-6 flex items-center gap-4 active:bg-gray-50 transition-colors"
+        >
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-bold text-gray-900">Refer & Earn</span>
+            <span className="mt-0.5 block text-xs text-gray-500">
+              {referralStats?.enabled && referralStats?.maxEarning > 0
+                ? `Earn up to ₹${Number(referralStats.maxEarning).toLocaleString("en-IN")} when friends join as delivery partners`
+                : "Invite friends to deliver with Foodie"}
+            </span>
+            <span className="mt-2 inline-flex items-center gap-0.5 text-xs font-bold text-[#0E4B9C]">
+              Invite friends <ChevronRight className="h-3.5 w-3.5" />
+            </span>
+          </span>
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-blue-50">
+            <Gift className="h-6 w-6 text-[#0E4B9C]" />
+          </span>
+        </button>
+        )}
 
         {/* Sections */}
         <div className="space-y-4">
