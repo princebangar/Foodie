@@ -140,6 +140,12 @@ export const adminSidebarMenu = [
       },
       {
         type: "link",
+        label: "Foodie Diamond Member",
+        path: "/admin/food/diamond",
+        icon: "Gem",
+      },
+      {
+        type: "link",
         label: "Support Tickets (User & Restaurant)",
         path: "/admin/food/support-tickets",
         icon: "MessageSquare",

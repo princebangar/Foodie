@@ -40,6 +40,14 @@ import {
 } from "@food/components/ui/dropdown-menu";
 
 import { getAvatarColor } from "@food/utils/avatarUtils";
+import {
+  DIAMOND_BG,
+  DIAMOND_FONT,
+  DiamondGem,
+  DiamondPattern,
+  diamondTextStyle,
+} from "@food/components/user/diamond/DiamondBrand";
+import { fetchDiamond, getCachedDiamond, preloadDiamondPage } from "@food/components/user/diamond/diamondCache";
 import { normalizeImageUrl } from "@food/utils/common";
 
 import AnimatedPage from "@food/components/user/AnimatedPage";
@@ -321,6 +329,29 @@ export default function Profile() {
     };
   }, []);
 
+  // Foodie Diamond strip on the profile card. The profile tab stays mounted, so refresh
+  // whenever it is shown again (e.g. right after buying Diamond).
+  const [diamond, setDiamond] = useState(() => getCachedDiamond());
+  const isProfileTab = /\/profile\/?$/.test(location.pathname);
+  useEffect(() => {
+    if (!isProfileTab) return undefined;
+    let mounted = true;
+    const cached = getCachedDiamond();
+    if (cached) setDiamond(cached);
+    fetchDiamond()
+      .then((data) => mounted && data && setDiamond(data))
+      .catch(() => {});
+    // First tap on the strip should open the Diamond page without waiting for its code.
+    preloadDiamondPage().catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, [isProfileTab]);
+  const isDiamondMember = Boolean(diamond?.membership?.isMember);
+  const showDiamondJoin = !isDiamondMember && diamond?.plan?.enabled && diamond?.plan?.price > 0;
+  // Zomato-style dark card whenever Diamond is shown (member or on sale).
+  const diamondCard = isDiamondMember || showDiamondJoin;
+
   useEffect(() => {
     let mounted = true;
     userAPI
@@ -513,11 +544,23 @@ export default function Profile() {
         </div>
 
         {/* Profile Info Card */}
-        <Card className="bg-white dark:bg-[#1a1a1a] py-0 rounded-[20px] shadow-[0_4px_16px_rgba(0,0,0,0.02)] mb-0 border-0 dark:border-gray-800 overflow-hidden">
-          <CardContent className="p-4 py-2.3">
+        <Card
+          className={`relative gap-0 py-0 rounded-[20px] mb-0 border-0 overflow-hidden ${
+            isDiamondMember
+              ? "shadow-[0_8px_24px_rgba(11,14,19,0.25)]"
+              : "bg-white dark:bg-[#1a1a1a] shadow-[0_4px_16px_rgba(0,0,0,0.02)] dark:border-gray-800"
+          }`}
+          style={diamondCard ? { background: DIAMOND_BG } : undefined}
+        >
+          {diamondCard && <DiamondPattern corner />}
+          <CardContent className={`relative p-4 py-2.3 ${diamondCard ? "pt-5 pb-5" : ""}`}>
             <div className="flex items-center gap-4">
               <div className="relative">
-                <Avatar className="h-16 w-16 border border-gray-100 dark:border-gray-800 shadow-sm bg-transparent">
+                <Avatar
+                  className={`h-16 w-16 shadow-sm bg-transparent ${
+                    diamondCard ? "border-2 border-[#9EE6FF]/70" : "border border-gray-100 dark:border-gray-800"
+                  }`}
+                >
                   {(userProfile?.localImagePreview || (userProfile?.profileImage && typeof userProfile.profileImage === "string" && userProfile.profileImage.trim() !== "" && userProfile.profileImage !== "null" && userProfile.profileImage !== "undefined")) ? (
                     <img
                       src={userProfile?.localImagePreview || normalizeImageUrl(userProfile.profileImage)}
@@ -534,34 +577,56 @@ export default function Profile() {
                 </Avatar>
               </div>
               <div className="flex-1">
-                <h2 className="text-[19px] font-bold text-gray-900 dark:text-white leading-tight capitalize">
+                <h2 className={`font-bold leading-tight capitalize ${diamondCard ? "text-[24px] text-white" : "text-[19px] text-gray-900 dark:text-white"}`}>
                   {displayName}
                 </h2>
-                {hasValidEmail && (
-                  <p className="text-[13px] text-gray-500 dark:text-gray-400 mt-0.5">
+                {!diamondCard && hasValidEmail && (
+                  <p className={`text-[13px] mt-0.5 ${diamondCard ? "text-gray-400" : "text-gray-500 dark:text-gray-400"}`}>
                     {userProfile.email}
                   </p>
                 )}
-                {userProfile?.phone && (
-                  <p className="text-[13px] text-gray-500 dark:text-gray-400 mt-0.5">
+                {!diamondCard && userProfile?.phone && (
+                  <p className={`text-[13px] mt-0.5 ${diamondCard ? "text-gray-400" : "text-gray-500 dark:text-gray-400"}`}>
                     {userProfile.phone}
                   </p>
                 )}
-                {!hasValidEmail && !userProfile?.phone && (
+                {!diamondCard && !hasValidEmail && !userProfile?.phone && (
                   <p className="text-[13px] text-gray-400 mt-0.5">
                     Not available
                   </p>
                 )}
                 <Link
                   to="/user/profile/edit"
-                  className="inline-flex items-center text-[13px] font-medium text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white mt-1 transition-colors"
+                  className={`inline-flex items-center font-medium transition-colors ${diamondCard ? "mt-2.5 text-[15px]" : "mt-1 text-[13px]"} ${
+                    diamondCard ? "text-white" : "text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white"
+                  }`}
                 >
                   <span>Edit profile</span>
-                  <span className="text-[9px] ml-1 leading-none text-gray-500 dark:text-gray-400">▶</span>
+                  <span className={`text-[9px] ml-1 leading-none ${diamondCard ? "text-gray-300" : "text-gray-500 dark:text-gray-400"}`}>▶</span>
                 </Link>
               </div>
             </div>
           </CardContent>
+
+          {/* Foodie Diamond strip, like Zomato's "Gold member · saved ₹53" */}
+          {diamondCard && (
+            <Link
+              to="/food/user/diamond"
+              onPointerDown={() => preloadDiamondPage().catch(() => {})}
+              className="relative flex items-center gap-3 border-t border-white/10 px-4 py-3.5 active:opacity-90"
+            >
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/[0.08]">
+                <DiamondGem className="h-5 w-5" id="profile-gem" />
+              </span>
+              <span
+                className="min-w-0 flex-1 truncate whitespace-nowrap text-[19px] font-semibold"
+                style={{ ...diamondTextStyle, fontFamily: DIAMOND_FONT }}
+              >
+                Diamond Member
+              </span>
+              <ChevronRight className="h-5 w-5 shrink-0 text-gray-300" />
+            </Link>
+          )}
         </Card>
 
         {/* Account Options */}

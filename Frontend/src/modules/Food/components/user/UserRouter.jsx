@@ -71,6 +71,9 @@ const DeliverySafety = lazy(() => import("@food/pages/user/profile/DeliverySafet
 const Accessibility = lazy(() => import("@food/pages/user/profile/Accessibility"))
 const Logout = lazy(() => import("@food/pages/user/profile/Logout"))
 const ReferEarn = lazy(() => import("@food/pages/user/profile/ReferEarn"))
+const DiamondPage = lazy(() => import("@food/pages/user/diamond/DiamondPage"))
+const DiamondTerms = lazy(() => import("@food/pages/user/diamond/DiamondTerms"))
+const DiamondSupport = lazy(() => import("@food/pages/user/diamond/DiamondSupport"))
 const UserCMSHelpSupportPage = lazy(() => import("@food/pages/user/profile/UserCMSHelpSupportPage"))
 const Settings = lazy(() => import("@food/pages/user/profile/Settings"))
 
@@ -251,6 +254,11 @@ export default function UserRouter() {
             <Route path="profile/accessibility" element={<Accessibility />} />
             <Route path="profile/logout" element={<Logout />} />
             <Route path="profile/refer-earn" element={<ReferEarn />} />
+
+            {/* Foodie Diamond membership */}
+            <Route path="diamond" element={<DiamondPage />} />
+            <Route path="diamond/terms" element={<DiamondTerms />} />
+            <Route path="diamond/support" element={<DiamondSupport />} />
             <Route path="profile/dining-bookings" element={<MyBookings />} />
             <Route path="profile/settings" element={<Suspense fallback={<Loader />}><Settings /></Suspense>} />
 

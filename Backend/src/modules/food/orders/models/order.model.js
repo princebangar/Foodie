@@ -65,6 +65,19 @@ const pricingSchema = new mongoose.Schema(
         discount: { type: Number, default: 0, min: 0 },
         /** What the customer saved through Buy 1 Get 1 free lines (not deducted from any total). */
         bogoSavings: { type: Number, default: 0, min: 0 },
+        /** Foodie Diamond savings on this order. `discount` already includes `diamondSavings.discount`. */
+        diamondSavings: {
+            type: new mongoose.Schema(
+                {
+                    delivery: { type: Number, default: 0, min: 0 },
+                    platformFee: { type: Number, default: 0, min: 0 },
+                    discount: { type: Number, default: 0, min: 0 },
+                    total: { type: Number, default: 0, min: 0 }
+                },
+                { _id: false }
+            ),
+            default: undefined
+        },
         total: { type: Number, required: true, min: 0 },
         currency: { type: String, default: 'INR' },
         couponCode: { type: String, default: null, trim: true, uppercase: true }

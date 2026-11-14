@@ -12,6 +12,7 @@ import {
   resolveCheckoutItems,
 } from './order-item-pricing.service.js';
 import { applyBogoToItems } from '../../admin/services/bogoPricing.service.js';
+import { resolveDiamondPricing } from '../../diamond/services/diamond.service.js';
 
 export async function calculateOrderPricing(userId, dto) {
   const resolved = await resolveCheckoutItems(userId, dto);
@@ -76,7 +77,7 @@ export async function calculateOrderPricing(userId, dto) {
 
   const basePackagingFee = feeSettings.packagingFee != null ? Number(feeSettings.packagingFee) : 0;
   const packagingFee = dto.orderType === "takeaway" ? 0 : basePackagingFee;
-  const platformFee = feeSettings.platformFee != null ? Number(feeSettings.platformFee) : 0;
+  let platformFee = feeSettings.platformFee != null ? Number(feeSettings.platformFee) : 0;
 
   const freeUpTo = Number(feeSettings.freeDeliveryUpTo || 0);
   let distanceKm = null;
@@ -244,6 +245,33 @@ export async function calculateOrderPricing(userId, dto) {
     }
   }
 
+  // Foodie Diamond: members get free delivery / platform fee / extra % off (admin-set).
+  // The extra off is platform-funded like a coupon, so it is added to `discount` and every
+  // payout/report keeps working; `diamondSavings` keeps the breakdown for the bill.
+  const couponDiscount = discount;
+  let diamondSavings = null;
+  let diamondOffer = null;
+  try {
+    const diamond = await resolveDiamondPricing(userId, {
+      subtotal,
+      deliveryFee,
+      platformFee,
+      orderType: dto.orderType || "delivery",
+      distanceKm,
+      couponDiscount,
+    });
+    if (diamond.isMember && diamond.savings?.total > 0) {
+      diamondSavings = diamond.savings;
+      deliveryFee = Math.max(0, deliveryFee - diamondSavings.delivery);
+      platformFee = Math.max(0, platformFee - diamondSavings.platformFee);
+      discount += diamondSavings.discount;
+    }
+    diamondOffer = diamond.offer;
+  } catch (err) {
+    // Membership lookup must never block checkout.
+    diamondSavings = null;
+  }
+
   const total = Math.max(
     0,
     subtotal + packagingFee + deliveryFee + platformFee + tax - discount,
@@ -262,6 +290,9 @@ export async function calculateOrderPricing(userId, dto) {
       freeDeliveryUpTo: Number.isFinite(freeUpTo) ? freeUpTo : undefined,
       platformFee,
       discount,
+      couponDiscount,
+      diamondSavings: diamondSavings || undefined,
+      diamondOffer: diamondOffer || undefined,
       total,
       currency: "INR",
       couponCode: appliedCoupon?.code || codeRaw || null,

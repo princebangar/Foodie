@@ -22,6 +22,7 @@ import {
   X,
   LayoutDashboard,
   Gift,
+  Gem,
   DollarSign,
   Image,
   Bell,
@@ -66,6 +67,7 @@ const debugError = (...args) => {}
 
 // Icon mapping
 const iconMap = {
+  Gem,
   LayoutDashboard,
   UtensilsCrossed,
   Building2,

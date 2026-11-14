@@ -26,6 +26,7 @@ import useAppBackNavigation from "@food/hooks/useAppBackNavigation"
 import { filterPublicOffers, mapPublicOfferToCartCoupon } from "@food/utils/offerUtils"
 import dishFallbackImage from "@food/assets/placeholders/dish_fallback.webp"
 import BogoTag from "@food/components/user/BogoTag"
+import { DIAMOND_BG, DIAMOND_FONT, DiamondGem, diamondTextStyle } from "@food/components/user/diamond/DiamondBrand"
 import { getBogoLimitsLabel, getCartBogoFreeByLine, getCartBogoSavings, isBogoUsedUp } from "@food/utils/bogo"
 const zoopSound = "/zomato_sms.mp3"
 const debugLog = (...args) => { }
@@ -1369,6 +1370,10 @@ export default function Cart() {
   const packagingFee = pricing != null ? (pricing.packagingFee ?? 0) : (feeSettings.packagingFee ?? 0)
   const gstCharges = pricing != null ? (pricing.tax ?? 0) : Math.round(subtotal * ((feeSettings.gstRate ?? 0) / 100))
   const discount = pricing?.discount || (appliedCoupon ? Math.min(appliedCoupon.discount, subtotal * 0.5) : 0)
+  // Foodie Diamond: `discount` from the server already includes the Diamond extra off.
+  const diamondSavings = pricing?.diamondSavings || null
+  const diamondOffer = pricing?.diamondOffer || null
+  const couponDiscount = Math.max(0, discount - Number(diamondSavings?.discount || 0))
   const totalBeforeDiscount = subtotal + deliveryFee + platformFee + packagingFee + gstCharges
   const total = pricing?.total || (totalBeforeDiscount - discount)
   const savings = pricing?.savings ?? Math.max(0, totalBeforeDiscount - total)
@@ -3207,6 +3212,40 @@ export default function Cart() {
                   </div>
                 )}
               </div>
+{/* Foodie Diamond: what a member saves here, or what joining would save */}
+              {!loadingPricing && (diamondSavings?.total > 0 || diamondOffer?.potentialSavings > 0) && (
+                <Link
+                  to="/food/user/diamond"
+                  className="flex items-center gap-3 rounded-2xl px-4 py-3 shadow-sm active:opacity-90"
+                  style={{ background: DIAMOND_BG, fontFamily: DIAMOND_FONT }}
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[0.07]">
+                    <DiamondGem className="h-5 w-5" id="cart-gem" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    {diamondSavings?.total > 0 ? (
+                      <>
+                        <span className="block text-[15px] font-semibold text-white">
+                          You're saving {RUPEE_SYMBOL}{Number(diamondSavings.total).toFixed(0)} with{" "}
+                          <span style={diamondTextStyle}>Diamond</span>
+                        </span>
+                        <span className="block text-[12px] text-gray-400">Applied automatically on this order</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="block text-[15px] font-semibold text-white">
+                          Save {RUPEE_SYMBOL}{Number(diamondOffer.potentialSavings).toFixed(0)} on this order with{" "}
+                          <span style={diamondTextStyle}>Diamond</span>
+                        </span>
+                        <span className="block text-[12px] text-gray-400">
+                          Join for {RUPEE_SYMBOL}{Number(diamondOffer.price).toFixed(0)} · {diamondOffer.durationLabel}
+                        </span>
+                      </>
+                    )}
+                  </span>
+                  <ChevronRight className="h-5 w-5 shrink-0 text-gray-400" />
+                </Link>
+              )}
 {/* Bill Details */}
               <div className="bg-white dark:bg-[#1a1a1a] px-4 md:px-6 py-5 rounded-2xl shadow-sm border border-slate-100 dark:border-gray-800">
                 <button
@@ -3263,6 +3302,11 @@ export default function Cart() {
                            <span className={deliveryFee === 0 ? "text-[#DC2626] font-medium" : "text-gray-800 dark:text-gray-200 font-medium"}>
                              {loadingPricing ? (
                                <span className="inline-block h-4 w-12 rounded bg-gray-200 dark:bg-gray-700 animate-pulse align-middle" />
+                             ) : deliveryFee === 0 && diamondSavings?.delivery > 0 ? (
+                               <span className="flex items-baseline gap-1.5">
+                                 <span className="text-xs text-gray-400 line-through">{RUPEE_SYMBOL}{Number(diamondSavings.delivery).toFixed(2)}</span>
+                                 FREE
+                               </span>
                              ) : (
                                deliveryFee === 0 ? "FREE" : `${RUPEE_SYMBOL}${deliveryFee.toFixed(2)}`
                              )}
@@ -3288,6 +3332,15 @@ export default function Cart() {
                     )}
 
                     {/* Removed TAKEAWAY ORDER badge from here */}
+                    {platformFee === 0 && diamondSavings?.platformFee > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600 dark:text-gray-400 font-medium">Platform Fee</span>
+                        <span className="flex items-baseline gap-1.5 text-[#DC2626] font-medium">
+                          <span className="text-xs text-gray-400 line-through">{RUPEE_SYMBOL}{Number(diamondSavings.platformFee).toFixed(2)}</span>
+                          FREE
+                        </span>
+                      </div>
+                    )}
                     {platformFee > 0 && (
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600 dark:text-gray-400 font-medium">Platform Fee</span>
@@ -3312,14 +3365,29 @@ export default function Cart() {
                         </span>
                       </div>
                     )}
-                    {discount > 0 && (
+                    {couponDiscount > 0 && (
                        <div className="flex justify-between text-sm text-[#DC2626] font-medium">
                          <span>Coupon Discount</span>
                          <span>
                            {loadingPricing ? (
                              <span className="inline-block h-4 w-12 rounded bg-[#DC2626]/20 animate-pulse align-middle" />
                            ) : (
-                             `-${RUPEE_SYMBOL}${discount.toFixed(2)}`
+                             `-${RUPEE_SYMBOL}${couponDiscount.toFixed(2)}`
+                           )}
+                         </span>
+                       </div>
+                    )}
+                    {diamondSavings?.discount > 0 && (
+                       <div className="flex justify-between text-sm font-medium text-[#0E7FAE]">
+                         <span className="flex items-center gap-1.5">
+                           <DiamondGem className="h-3.5 w-3.5" id="bill-gem" />
+                           Diamond extra off
+                         </span>
+                         <span>
+                           {loadingPricing ? (
+                             <span className="inline-block h-4 w-12 rounded bg-sky-100 animate-pulse align-middle" />
+                           ) : (
+                             `-${RUPEE_SYMBOL}${Number(diamondSavings.discount).toFixed(2)}`
                            )}
                          </span>
                        </div>

@@ -1043,6 +1043,14 @@ export const adminAPI = {
   getDeliveryReferrals: (params) =>
     apiClient.get("/food/admin/delivery-referral/referrals", { params, contextModule: "admin" }),
 
+  /** Foodie Diamond membership (admin) */
+  getDiamondSettings: () =>
+    apiClient.get("/food/admin/diamond/settings", { contextModule: "admin" }),
+  saveDiamondSettings: (body) =>
+    apiClient.put("/food/admin/diamond/settings", body ?? {}, { contextModule: "admin" }),
+  getDiamondMembers: (params) =>
+    apiClient.get("/food/admin/diamond/members", { params, contextModule: "admin" }),
+
   /** Safety / Emergency Reports (admin) */
   getSafetyEmergencyReports: (params) =>
     apiClient.get("/food/admin/safety-emergency-reports", {
@@ -2537,6 +2545,11 @@ export const userAPI = {
   /** GET /food/user/referrals/details (Bearer USER) */
   getReferralDetails: () =>
     apiClient.get("/food/user/referrals/details", { contextModule: "user" }),
+  /** Foodie Diamond membership (Bearer USER) */
+  getDiamond: () => apiClient.get("/food/user/diamond", { contextModule: "user" }),
+  getDiamondTerms: () => apiClient.get("/food/user/diamond/terms", { contextModule: "user" }),
+  createDiamondOrder: () => apiClient.post("/food/user/diamond/order", {}, { contextModule: "user" }),
+  verifyDiamondPayment: (body) => apiClient.post("/food/user/diamond/verify", body ?? {}, { contextModule: "user" }),
   /** POST /food/user/wallet/topup/order (Bearer USER). Body: { amount } */
   createWalletTopupOrder: (amount) =>
     apiClient.post(

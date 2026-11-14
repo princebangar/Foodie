@@ -29,6 +29,12 @@ import {
     createSupportTicketController,
     listMySupportTicketsController
 } from '../controllers/supportTicket.controller.js';
+import {
+    createDiamondOrderController,
+    getDiamondTermsController,
+    getUserDiamondController,
+    verifyDiamondPaymentController
+} from '../../diamond/controllers/diamond.controller.js';
 
 const router = express.Router();
 
@@ -40,6 +46,12 @@ router.post('/profile/profile-image', upload.single('file'), uploadCurrentUserPr
 router.get('/wallet', getUserWalletController);
 router.post('/wallet/topup/order', createWalletTopupOrderController);
 router.post('/wallet/topup/verify', verifyWalletTopupPaymentController);
+
+// Foodie Diamond membership (Bearer USER)
+router.get('/diamond', getUserDiamondController);
+router.get('/diamond/terms', getDiamondTermsController);
+router.post('/diamond/order', createDiamondOrderController);
+router.post('/diamond/verify', verifyDiamondPaymentController);
 
 // Referral stats (Bearer USER)
 router.get('/referrals/stats', getUserReferralStatsController);

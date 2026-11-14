@@ -23,6 +23,7 @@ import * as otherPriceController from '../controllers/otherPrice.controller.js';
 import * as comboOfferController from '../controllers/comboOffer.controller.js';
 import * as bogoOfferController from '../controllers/bogoOffer.controller.js';
 import * as deliveryReferralController from '../controllers/deliveryReferral.controller.js';
+import * as diamondController from '../../diamond/controllers/diamond.controller.js';
 
 const router = express.Router();
 
@@ -197,6 +198,11 @@ router.put('/referral-settings', adminController.createOrUpdateReferralSettings)
 router.get('/delivery-referral/settings', deliveryReferralController.getDeliveryReferralSettingsController);
 router.put('/delivery-referral/settings', deliveryReferralController.saveDeliveryReferralSettingsController);
 router.get('/delivery-referral/referrals', deliveryReferralController.listDeliveryReferralsController);
+
+// ----- Foodie Diamond membership -----
+router.get('/diamond/settings', diamondController.getAdminDiamondSettingsController);
+router.put('/diamond/settings', diamondController.saveAdminDiamondSettingsController);
+router.get('/diamond/members', diamondController.listDiamondMembersController);
 
 // ----- Business Settings -----
 router.get('/business-settings/public', businessSettingsController.getBusinessSettings); // Public endpoint

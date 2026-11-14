@@ -672,6 +672,7 @@ export async function createOrder(userId, dto, options = {}) {
     platformFee: Number(priced.pricing?.platformFee ?? 0),
     discount: Number(priced.pricing?.discount ?? 0),
     bogoSavings: Number(priced.pricing?.bogoSavings ?? 0),
+    ...(priced.pricing?.diamondSavings?.total > 0 ? { diamondSavings: priced.pricing.diamondSavings } : {}),
     total: Number(priced.pricing?.total ?? 0),
     currency: String(priced.pricing?.currency || "INR"),
     couponCode: priced.pricing?.couponCode || null,
