@@ -1,6 +1,6 @@
 // Web: modules/auth/pages/Login.jsx — the customer login at /user/auth/login (UnifiedOTPFastLogin): the admin login
-// images slider on top, a white sheet with "Log in or sign up" (+91 number, Continue) and the legal links, "Skip"
-// (guest), then the OTP page sliding in from the right (4 boxes, resend timer, block timer), the "Almost there!" name
+// images slider on top, a white sheet with "Log in or sign up" (+91 number, Continue, "Continue as Guest" - the
+// web's "Skip" pill, moved under Continue) and the legal links, then the OTP page sliding in from the right (4 boxes, resend timer, block timer), the "Almost there!" name
 // popup for new users and the "Account Found!" restore popup for a deleted account. Same API calls and session
 // restore (sessionStorage user_auth_session_data).
 // Native: the sheet rides on the keyboard (the slider keeps its size); Android Back on the OTP page goes back to the
@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { LinearGradient } from "expo-linear-gradient"
 import { BlurView } from "expo-blur"
 import Svg, { Circle, Line, Rect } from "react-native-svg"
-import { ArrowLeft, ChevronRight, Phone, Loader2, X, User } from "lucide-react-native"
+import { ArrowLeft, Phone, Loader2, X, User } from "lucide-react-native"
 import { Link, useNavigate } from "@/lib/router"
 import { toast } from "@/lib/toast"
 import { Text, TextInput } from "@/native/ui"
@@ -26,8 +26,8 @@ import { setAuthData } from "@food/utils/auth"
 import { LoginImageSlider, LoginSliderDots, useLoginImageSlider } from "../components/LoginImageSlider"
 
 const SLIDER_ASPECT = 1350 / 1080
-const SLIDER_SCREEN_SHARE = 0.56
-const SHEET_MIN_HEIGHT = 236
+const SLIDER_SCREEN_SHARE = 0.52 // web 0.56: the sheet also holds "Continue as Guest" now
+const SHEET_MIN_HEIGHT = 330 // small phones: the banner gives way so the sheet (with the guest button) fits
 const RED = "#E23744"
 
 function IndiaFlag() {
@@ -450,21 +450,6 @@ export default function UnifiedOTPFastLogin() {
       <LoginExitGuard enabled={step === 1} dirty={phoneNumber.length > 0} accent={RED} />
       <LoginImageSlider slider={slider} height={sliderHeight} />
 
-      {step === 1 && blockTimer <= 0 && (
-        <Pressable
-          onPress={() => {
-            localStorage.setItem("user_authenticated", "false")
-            clearSessionData()
-            navigate("/food/user")
-          }}
-          style={({ pressed }) => [s.skip, { top: insets.top + 14 }, pressed && { backgroundColor: alpha("#000000", 0.6) }]}
-        >
-          <BlurView intensity={20} tint="dark" style={[StyleSheet.absoluteFill, { borderRadius: 9999 }]} />
-          <Text style={s.skipText}>Skip</Text>
-          <ChevronRight size={16} color={alpha("#ffffff", 0.8)} strokeWidth={2.25} />
-        </Pressable>
-      )}
-
       {/* Bottom sheet */}
       <View style={[s.sheetWrap, { bottom: keyboard }]}>
         <View style={{ paddingBottom: 10 }}>
@@ -513,6 +498,19 @@ export default function UnifiedOTPFastLogin() {
           <Pressable onPress={handleSendOTP} disabled={loading} style={({ pressed }) => [s.primary, { marginTop: 20 }, pressed && { backgroundColor: "#CB202D" }]}>
             {loading && step === 1 ? <Spinner /> : <Text style={s.primaryText}>Continue</Text>}
           </Pressable>
+          {/* guest entry (web: the "Skip" pill over the banner, moved here - on the phone it covered the banner's heading) */}
+          {blockTimer <= 0 && (
+            <Pressable
+              onPress={() => {
+                localStorage.setItem("user_authenticated", "false")
+                clearSessionData()
+                navigate("/food/user")
+              }}
+              style={({ pressed }) => [s.guest, pressed && { backgroundColor: alpha(RED, 0.08) }]}
+            >
+              <Text style={s.guestText}>Continue as Guest</Text>
+            </Pressable>
+          )}
 
           {/* Footer Info - only on login step, not OTP */}
           {!keyboardOpen && (
@@ -709,23 +707,6 @@ export default function UnifiedOTPFastLogin() {
 
 const useStyles = makeStyles(({ dark }) => ({
   root: { flex: 1, backgroundColor: dark ? "#0a0a0a" : colors.white, overflow: "hidden" },
-  skip: {
-    position: "absolute",
-    right: 16,
-    zIndex: 10,
-    height: 32,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 2,
-    borderRadius: 9999,
-    borderWidth: 1,
-    borderColor: alpha("#ffffff", 0.25),
-    backgroundColor: alpha("#000000", 0.4),
-    paddingLeft: 14,
-    paddingRight: 10,
-    overflow: "hidden",
-  },
-  skipText: { fontSize: 14, lineHeight: 20, fontWeight: "500", color: colors.white },
   sheetWrap: { position: "absolute", left: 0, right: 0, zIndex: 10, maxHeight: "100%" },
   sheet: { flexGrow: 1, backgroundColor: dark ? "#0a0a0a" : colors.white, paddingHorizontal: 24, paddingTop: 16 },
   title: { marginBottom: 16, textAlign: "center", fontSize: 16, lineHeight: 23, fontWeight: "500", color: dark ? colors.gray[300] : "#596378" },
@@ -746,6 +727,8 @@ const useStyles = makeStyles(({ dark }) => ({
   phoneError: { marginTop: 8, fontSize: 13, lineHeight: 18, fontWeight: "500", color: dark ? colors.red[500] : colors.red[600] },
   primary: { height: 52, width: "100%", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 8, backgroundColor: RED },
   primaryText: { fontSize: 20, lineHeight: 26, color: colors.white },
+  guest: { marginTop: 12, height: 52, width: "100%", alignItems: "center", justifyContent: "center", borderRadius: 8, borderWidth: 1.5, borderColor: RED },
+  guestText: { fontSize: 18, lineHeight: 24, color: RED },
   legal: { textAlign: "center", fontSize: 14, lineHeight: 20, color: dark ? colors.gray[400] : "#414A5D" },
   legalLink: { borderBottomWidth: 1, borderStyle: "dotted", borderBottomColor: "#9CA3AF", paddingBottom: 1 },
   otpPage: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, zIndex: 20, backgroundColor: dark ? "#0a0a0a" : colors.white },
