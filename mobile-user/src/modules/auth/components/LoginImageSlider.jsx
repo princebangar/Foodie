@@ -95,7 +95,7 @@ export function useLoginImageSlider(appType) {
   }
 }
 
-export function LoginImageSlider({ slider, height }) {
+export function LoginImageSlider({ slider, height, fallbackColor = "#E23744" }) {
   const { images, position, step, settle, setPaused } = slider
   const count = images.length
   const looping = count > 1
@@ -154,8 +154,8 @@ export function LoginImageSlider({ slider, height }) {
 
   return (
     <View style={[styles.wrap, { height }]} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
-      {/* Plain brand red behind the slides; only seen before the admin images have ever loaded. */}
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: "#E23744" }]} />
+      {/* The app theme colour behind the slides; only seen before the admin images have ever loaded. */}
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: fallbackColor }]} />
       {count > 0 && width > 0 ? (
         <Animated.View {...pan.panHandlers} style={{ flexDirection: "row", height: "100%", transform: [{ translateX: x }] }}>
           {slides.map((image, slide) => (

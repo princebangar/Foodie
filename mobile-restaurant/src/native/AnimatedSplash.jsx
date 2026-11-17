@@ -14,14 +14,14 @@ import { Animated, Easing, Image, StyleSheet, Text, View, useWindowDimensions } 
 import { StatusBar } from 'expo-status-bar';
 import Svg, { Circle, Ellipse, Path, Rect } from 'react-native-svg';
 
-// white letters + the orange Hello: the wordmark made for the crimson background (assets/splash-wordmark-light.png,
-// scripts/make-splash-wordmark.cjs)
-const WORDMARK = require('../../assets/splash-wordmark-light.png'); // 900 x 262
+// the white Foodie wordmark (letters + green leaf + smile, from mobile-user assets/splash-word.png + splash-smile.png)
+// made for the crimson background (assets/splash-wordmark-light.png; splash-icon-light.png is the same mark 635/1024 wide)
+const WORDMARK = require('../../assets/splash-wordmark-light.png'); // 900 x 421
 // The native splash (assets/splash-icon-light.png, app.json imageWidth 240) draws this wordmark 635/1024 of 240 dp wide
 // at the screen centre. This splash starts with the wordmark at exactly that size and place (nothing changes when it
 // takes over), and the wordmark grows to the bigger size while it lifts. The entrance waits START_DELAY_MS so the
 // native wordmark has faded out first (two wordmarks overlapping looked like a wiggle).
-const WORDMARK_RATIO = 262 / 900;
+const WORDMARK_RATIO = 421 / 900;
 const NATIVE_WORDMARK_W = (240 * 635) / 1024;
 // the restaurant header's dark end (bg-gradient-to-br from-[#B80B3D] to-[#66001D]); app.json splash + window
 // background use the same colour

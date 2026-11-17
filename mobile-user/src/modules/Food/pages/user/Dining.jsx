@@ -714,7 +714,9 @@ export default function Dining({ isTabActive = true }) {
     startBannerAutoSlide()
   }, [startBannerAutoSlide])
 
+  // slides only while this tab is on screen (each slide re-renders the whole page)
   useEffect(() => {
+    if (!isTabActive) return undefined
     startBannerAutoSlide()
 
     return () => {
@@ -722,7 +724,7 @@ export default function Dining({ isTabActive = true }) {
         clearInterval(autoSlideIntervalRef.current)
       }
     }
-  }, [startBannerAutoSlide])
+  }, [startBannerAutoSlide, isTabActive])
 
   const handleBannerTouchStart = useCallback((event) => {
     if (diningHeroBanners.length <= 1) return
@@ -1558,8 +1560,10 @@ const useStyles = makeStyles((t) => {
     countPill: { paddingHorizontal: sp(3), paddingVertical: sp(1), backgroundColor: dark ? alpha(colors.red[950], 0.3) : colors.red[50], borderWidth: 1, borderColor: dark ? alpha(colors.red[900], 0.5) : colors.red[100], borderRadius: 9999, ...shadow.sm },
     countPillText: { fontSize: 10, fontWeight: "900", color: "#ef4f5f", textTransform: "uppercase", letterSpacing: 1 },
     chip: {
-      height: 28,
-      paddingHorizontal: sp(2),
+      // the Button default size adds 8 px top/bottom padding: in a 28 px chip that cut the label in half
+      height: 32,
+      paddingVertical: 0,
+      paddingHorizontal: sp(3),
       borderRadius: 9999,
       flexDirection: "row",
       alignItems: "center",

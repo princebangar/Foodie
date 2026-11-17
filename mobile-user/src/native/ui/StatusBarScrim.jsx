@@ -11,7 +11,8 @@ export function StatusBarScrim({ color }) {
   return (
     <View
       pointerEvents="none"
-      style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top, backgroundColor: color, zIndex: 50, elevation: 50 }}
+      // elevation keeps it above elevated cards; its shadow is turned off (it drew a darker band under the status bar)
+      style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top, backgroundColor: color, zIndex: 50, elevation: 50, shadowColor: 'transparent', shadowOpacity: 0 }}
     />
   );
 }

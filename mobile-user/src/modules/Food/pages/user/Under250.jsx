@@ -551,7 +551,9 @@ export default function Under250({ isTabActive = true }) {
     startBannerAutoSlide()
   }, [startBannerAutoSlide])
 
+  // slides only while this tab is on screen (each slide re-renders the whole page)
   useEffect(() => {
+    if (!isTabActive) return undefined
     startBannerAutoSlide()
 
     return () => {
@@ -559,7 +561,7 @@ export default function Under250({ isTabActive = true }) {
         clearInterval(autoSlideIntervalRef.current)
       }
     }
-  }, [startBannerAutoSlide])
+  }, [startBannerAutoSlide, isTabActive])
 
   const handleBannerTouchStart = useCallback(() => {
     if (bannerImages.length <= 1) return

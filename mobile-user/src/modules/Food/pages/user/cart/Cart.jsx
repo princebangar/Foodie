@@ -491,6 +491,8 @@ export default function Cart() {
   const [orderSuccessSavingsAmount, setOrderSuccessSavingsAmount] = useState(0)
   const [placedOrderId, setPlacedOrderId] = useState(null)
   const [placedOrderObj, setPlacedOrderObj] = useState(null)
+  // set while moving to the order page: the (now empty) cart must not flash "Your cart is empty" on the way out
+  const [leavingToOrder, setLeavingToOrder] = useState(false)
   const [selectedAddressId, setSelectedAddressId] = useState(null)
   const [deliveryAddressMode, setDeliveryAddressMode] = useState(() => {
     try {
@@ -2634,13 +2636,13 @@ export default function Cart() {
   }
 
   const handleGoToOrders = () => {
+    setLeavingToOrder(true)
     setShowSavingsCongrats(false)
     setCongratssSavingsAmount(0)
     setCongratssSavingsPercentage(0)
     setCongratssSavingsItems([])
     setOrderSuccessSavingsAmount(0)
-    setShowOrderSuccess(false)
-    setShowPlacingOrder(false)
+    // the success screen stays up until the order page replaces this one (hiding it first showed the empty cart)
     navigate(`/user/orders/${placedOrderId}?confirmed=true`, {
       replace: true,
       state: { order: placedOrderObj, fromOrderPlaced: true, from: 'cart' }
@@ -2652,7 +2654,7 @@ export default function Cart() {
   const iconMuted = t.dark ? colors.gray[300] : colors.gray[700]
 
   // Empty cart state - but don't show if order success or placing order modal is active
-  if (cart.length === 0 && !showOrderSuccess && !showPlacingOrder && !showSavingsCongrats) {
+  if (cart.length === 0 && !showOrderSuccess && !showPlacingOrder && !showSavingsCongrats && !leavingToOrder) {
     return (
       <Screen edges={['bottom']} bg={t.dark ? '#0a0a0a' : colors.gray[50]}>
         <AnimatedPage style={{ flex: 1 }}>

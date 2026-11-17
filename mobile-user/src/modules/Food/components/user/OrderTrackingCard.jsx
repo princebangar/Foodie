@@ -353,12 +353,28 @@ function OrderTrackingCardInner({ hasBottomNav = true }) {
       fetchOrders();
     };
 
+    // cancelled from the order page: hide it now, then read the orders again (skipping the 2 s throttle)
+    const handleOrderCancelled = (event) => {
+      const ids = (event?.detail?.ids || []).map(String).filter(Boolean);
+      if (ids.length) {
+        setInvalidOrderIds((prev) => {
+          const next = new Set(prev);
+          ids.forEach((id) => next.add(id));
+          return next;
+        });
+      }
+      lastFetchOrdersTimeRef.current = 0;
+      fetchOrders();
+    };
+
     window.addEventListener('orderStatusNotification', handleOrderStatusNotification);
     window.addEventListener('order-placed', handleOrderPlaced);
+    window.addEventListener('order-cancelled', handleOrderCancelled);
 
     return () => {
       window.removeEventListener('orderStatusNotification', handleOrderStatusNotification);
       window.removeEventListener('order-placed', handleOrderPlaced);
+      window.removeEventListener('order-cancelled', handleOrderCancelled);
     };
   }, [fetchOrders]);
 

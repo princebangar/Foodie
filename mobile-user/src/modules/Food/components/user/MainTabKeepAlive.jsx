@@ -6,7 +6,8 @@
 // food_browse_scroll_v1) runs against that list.
 import { HoldWhileHidden } from '@/native/ui/HoldWhileHidden';
 import React, { Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { InteractionManager, StyleSheet, View } from 'react-native';
+import { isModuleAuthenticated } from '@food/utils/auth';
 import Home from '@food/pages/user/Home';
 import Dining from '@food/pages/user/Dining';
 import Under250 from '@food/pages/user/Under250';
@@ -53,6 +54,37 @@ export default function MainTabKeepAlive({ activeTab, holdTab = activeTab, isVis
   useEffect(() => {
     registerFoodPageCacheLifecycle();
   }, []);
+
+  // Build the other main tabs in the background, one at a time once the app is idle, so even the first tap on a tab
+  // shows a page that already exists (building the Takeaway home on the tap took 1-2 s). Profile only when signed in
+  // (its guard would send a guest to the login screen).
+  const prewarmStartedRef = useRef(false);
+  useEffect(() => {
+    if (!isVisible || prewarmStartedRef.current) return undefined;
+    prewarmStartedRef.current = true;
+    const queue = ['takeaway', 'dining', 'under250'];
+    if (isModuleAuthenticated('user')) queue.push('profile');
+    let cancelled = false;
+    let timer = null;
+    let task = null;
+    const mountNext = () => {
+      task = InteractionManager.runAfterInteractions(() => {
+        if (cancelled) return;
+        const tab = queue.shift();
+        if (!tab) return;
+        setVisited((prev) => (prev.has(tab) ? prev : new Set([...prev, tab])));
+        if (queue.length) timer = setTimeout(mountNext, 1800);
+      });
+    };
+    timer = setTimeout(mountNext, 3500);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      task?.cancel?.();
+      // left the tabs before it finished (opened a restaurant): carry on the next time they are shown
+      if (queue.length) prewarmStartedRef.current = false;
+    };
+  }, [isVisible]);
 
   useEffect(() => {
     if (!activeTab) return;

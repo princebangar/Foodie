@@ -1,125 +1,32 @@
+// Delivery partner login: same look as the customer app login (admin images slider + white sheet, then the white
+// "OTP Verification" page; modules/auth/components/PartnerLogin.jsx). Both /food/delivery/login and /food/delivery/otp
+// render this screen; the step is read from the path. The API calls, session keys and navigation are the delivery ones.
 import React, { useState, useEffect, useRef, useCallback } from "react"
-import { Animated, Easing, Keyboard, Pressable, StyleSheet, View, useWindowDimensions } from "react-native"
+import { Keyboard, Pressable, StyleSheet, View } from "react-native"
 import { useFocusEffect } from "expo-router"
-import Svg, { Defs, LinearGradient as SvgGradient, Path, Stop } from "react-native-svg"
-import { LinearGradient } from "expo-linear-gradient"
-import { Loader2, Pencil, X, ShieldCheck } from "lucide-react-native"
-import { useNavigate, Link, useLocation, router } from "@/lib/router"
+import { Phone, X } from "lucide-react-native"
+import { useNavigate, useLocation, router } from "@/lib/router"
 import { toast } from "@/lib/toast"
-import { AppImage, Dialog, KeyboardAwareScrollView, Text, TextInput } from "@/native/ui"
-import { StatusBar } from "@/native/ui/SectionStatusBar"
+import { Dialog, Text, TextInput } from "@/native/ui"
 import { LoginExitGuard } from "@/native/ui/LoginExitGuard"
-import { alpha, colors, fonts, shadow } from "@/theme"
+import { alpha, colors, deliveryTheme, shadow } from "@/theme"
 import { deliveryAPI } from "@food/api"
 import { setAuthData as storeAuthData, clearModuleAuth, setPendingTicket, clearPendingTicket } from "@food/utils/auth"
 import { collectFcmTokenFast, persistModuleFcmToken, finalizeDeliveryPendingSubmission, prefetchModuleFcmToken } from "@food/utils/firebaseMessaging"
 import { getUserFacingApiError, showUserFacingApiError } from "@/shared/utils/apiError"
 import { prefetchPolicyContentWhenIdle } from "@/shared/utils/policyPages"
 import { requestPhoneFocus, usePhoneFocusRequest } from "@/shared/utils/loginFocus"
-
-// web: /logo.webp banner (900 x 364)
-const LOGIN_LOGO = require("../../../../assets/public/images/logo.webp")
+import { LoginNumberScreen, LoginOtpScreen, LoginPrimaryButton, loginStyles } from "@/modules/auth/components/PartnerLogin"
 
 const DEFAULT_COUNTRY_CODE = "+91"
-const BLUE = "#0E4B9C"
-const NAVY = "#021024"
-
-/** Loader2 + animate-spin */
-function Spinner({ color = "#ffffff", size = 20 }) {
-  const spin = useRef(new Animated.Value(0)).current
-  useEffect(() => {
-    const loop = Animated.loop(Animated.timing(spin, { toValue: 1, duration: 1000, easing: Easing.linear, useNativeDriver: true }))
-    loop.start()
-    return () => loop.stop()
-  }, [spin])
-  const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] })
-  return (
-    <Animated.View style={{ transform: [{ rotate }] }}>
-      <Loader2 size={size} color={color} />
-    </Animated.View>
-  )
-}
-
-/** bg-gradient-to-r from-[#0E4B9C] to-[#021024] rounded-full button (disabled:opacity-50) */
-function GradientButton({ onPress, disabled, children, style, radius = 9999, height }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      style={({ pressed }) => [
-        styles.btnShell,
-        { borderRadius: radius },
-        !disabled && styles.btnShadow,
-        disabled && { opacity: 0.5 },
-        pressed && !disabled && { transform: [{ scale: 0.98 }] },
-        style,
-      ]}
-    >
-      <LinearGradient
-        colors={[BLUE, NAVY]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={[styles.btnInner, { borderRadius: radius }, height ? { height, paddingVertical: 0 } : null]}
-      >
-        {children}
-      </LinearGradient>
-    </Pressable>
-  )
-}
-
-/** h2 (web: bg-gradient-to-r from-[#0E4B9C] to-[#06336B] bg-clip-text). Plain blue text: an SVG text with a gradient
- * fill drew the D and P filled in on Android (Prince, 26 Oct). */
-function GradientTitle({ text }) {
-  return <Text style={styles.title}>{text}</Text>
-}
-
-// Drawn inside the scrolling content (not fixed behind it): when the keyboard opens and the form scrolls up, the blue
-// design moves up with the logo like a native pan, instead of the logo sliding over the fixed blue wave (Prince, 26 Oct).
-// The bottom wave sits at the bottom of the first screen (the keyboard room added below the content does not move it).
-function Waves({ height }) {
-  const { width } = useWindowDimensions()
-  const topH = height * 0.4
-  const botH = height * 0.5
-  return (
-    <>
-      <View pointerEvents="none" style={[styles.wave, { top: 0, height: topH, transform: [{ scale: 1.05 }] }]}>
-        <Svg width={width} height={topH} viewBox="0 0 1440 320" preserveAspectRatio="none">
-          <Defs>
-            <SvgGradient id="topBlueGrad" x1="0" y1="0" x2="1" y2="0">
-              <Stop offset="0" stopColor={BLUE} />
-              <Stop offset="1" stopColor={NAVY} />
-            </SvgGradient>
-          </Defs>
-          <Path fill="url(#topBlueGrad)" d="M -50,-50 L -50,280 C 200,100 800,100 1490,100 L 1490,-50 Z" />
-        </Svg>
-      </View>
-      <View pointerEvents="none" style={[styles.wave, { top: height - botH, height: botH, transform: [{ scale: 1.05 }] }]}>
-        <Svg width={width} height={botH} viewBox="0 0 1440 320" preserveAspectRatio="none">
-          <Defs>
-            <SvgGradient id="botBlueGrad" x1="0" y1="0" x2="1" y2="0">
-              <Stop offset="0" stopColor={BLUE} />
-              <Stop offset="1" stopColor={NAVY} />
-            </SvgGradient>
-          </Defs>
-          <Path fill="url(#botBlueGrad)" d="M -50,370 L -50,220 C 640,220 1240,220 1490,40 L 1490,370 Z" />
-        </Svg>
-      </View>
-    </>
-  )
-}
+// the app theme colour on the login (Continue button, OTP links, banner backdrop)
+const ACCENT = deliveryTheme.primary // #15498B
+const ACCENT_PRESSED = "#0F3A70"
 
 export default function DeliverySignIn() {
   const navigate = useNavigate()
   const location = useLocation()
   const isOtpStep = location.pathname.endsWith("/otp")
-  // The page keeps the height it had with the keyboard closed: the window shrinks while the keyboard is up, and the
-  // centred page used to re-centre in the smaller window — logo and title jumped up over the blue design (Prince, 26 Oct).
-  // Now only as much scrolls as the number box and the Log in button need to stay above the keyboard.
-  const { height: liveWindowHeight } = useWindowDimensions()
-  const fullHeightRef = useRef(liveWindowHeight)
-  if (liveWindowHeight > fullHeightRef.current) fullHeightRef.current = liveWindowHeight
-  const windowHeight = fullHeightRef.current
-
   // Terms / Privacy / Support load in the background so tapping one opens it straight away.
   useEffect(() => prefetchPolicyContentWhenIdle("delivery"), [])
 
@@ -182,7 +89,6 @@ export default function DeliverySignIn() {
   const [activePlatform, setActivePlatform] = useState("web")
   const [showRestorePopup, setShowRestorePopup] = useState(false)
   const [, setDeletedAccountData] = useState(null)
-  const [focusedField, setFocusedField] = useState(null)
   const inputRefs = useRef([])
   const phoneInputRef = useRef(null)
 
@@ -694,8 +600,8 @@ export default function DeliverySignIn() {
 
   const afterOtpUpdate = (newOtp, nextIndex) => {
     if (newOtp.every((digit) => digit !== "")) {
-      // last digit in: put the keyboard away so "Verify & Continue" is in view
-      Keyboard.dismiss()
+      // last digit in: verify straight away (customer login)
+      handleVerify(newOtp.join(""))
     } else if (nextIndex != null) {
       inputRefs.current[nextIndex]?.focus()
     }
@@ -755,12 +661,6 @@ export default function DeliverySignIn() {
     }
   }
 
-  const formatResendTimer = (seconds) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`
-  }
-
   const getPhoneNumber = () => {
     const p = authData?.phone || `${DEFAULT_COUNTRY_CODE} ${phone}`
     const cleaned = p.replace(/\s/g, "")
@@ -770,286 +670,100 @@ export default function DeliverySignIn() {
     return cleaned
   }
 
-  const isOtpComplete = otp.every((digit) => digit !== "")
-
   const showLoginStep = !isOtpStep
-
-  // step change slide (web: framer-motion opacity 0 -> 1, x ±20, 0.3 s)
-  const stepAnim = useRef(new Animated.Value(0)).current
-  useEffect(() => {
-    stepAnim.setValue(0)
-    Animated.timing(stepAnim, { toValue: 1, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start()
-  }, [stepAnim, showLoginStep])
-  const stepStyle = {
-    opacity: stepAnim,
-    transform: [{ translateX: stepAnim.interpolate({ inputRange: [0, 1], outputRange: [showLoginStep ? -20 : 20, 0] }) }],
-  }
 
   const closeRestorePopup = () => {
     setShowRestorePopup(false)
     goToLoginScreen()
   }
 
+  const otpPhoneLabel = `+91-${String(authData?.phone || phone).replace(/\D/g, "").slice(-10)}`
+
   return (
     <View style={styles.root}>
-      <StatusBar style="light" />
-      <LoginExitGuard enabled={showLoginStep} dirty={phone.length > 0} accent={BLUE} />
+      <LoginExitGuard enabled={showLoginStep} dirty={phone.length > 0} accent={ACCENT} />
 
-      {/* Main Content (the focused field and the button under it stay above the keyboard) */}
-      <KeyboardAwareScrollView
-        style={styles.fill}
-        extraOffset={showLoginStep ? 96 : 120}
-        contentContainerStyle={[styles.main, { minHeight: windowHeight }]}
-        showsVerticalScrollIndicator={false}
-      >
-        <Waves height={windowHeight} />
-        <View style={styles.column}>
-          {/* Logo & Header */}
-          <View style={styles.header}>
-            {/* web: h-14 w-auto mb-3 rounded-xl object-contain shadow-md */}
-            <View style={styles.logoBox}>
-              <AppImage src={LOGIN_LOGO} style={styles.logo} contentFit="contain" accessibilityLabel="Foodie Logo" />
+      {showLoginStep ? (
+        <LoginNumberScreen
+          appType="delivery"
+          phone={phone}
+          onPhoneChange={setPhone}
+          phoneInputRef={phoneInputRef}
+          onContinue={handleSendOTP}
+          loading={loading}
+          accent={ACCENT}
+          accentPressed={ACCENT_PRESSED}
+          legalFrom="/food/delivery/login"
+          legalLinks={[
+            { to: "/food/delivery/terms", label: "Terms of Service" },
+            { to: "/food/delivery/privacy", label: "Privacy Policy" },
+            { to: "/food/delivery/help/content", label: "Support" },
+          ]}
+        />
+      ) : (
+        <LoginOtpScreen
+          phoneLabel={otpPhoneLabel}
+          otp={otp}
+          inputRefs={inputRefs}
+          onOtpChange={handleChange}
+          onOtpKeyPress={handleKeyDown}
+          loading={loading}
+          otpError={error}
+          blockTimer={blockTimer}
+          resendTimer={resendTimer}
+          onResend={handleResend}
+          accent={ACCENT}
+          onBack={handleBackToLogin}
+        >
+          {pendingMessage ? (
+            <View style={[styles.pendingCard, isRejected ? styles.pendingRejected : styles.pendingAmber]}>
+              <View style={{ gap: 8 }}>
+                <Text style={[styles.pendingTitle, { color: isRejected ? colors.red[700] : colors.amber[700] }]}>
+                  {isRejected ? "APPLICATION REJECTED" : "PENDING VERIFICATION"}
+                </Text>
+                <Text style={[styles.pendingMsg, { color: alpha(isRejected ? colors.red[600] : colors.amber[600], 0.9) }]}>
+                  {pendingMessage}
+                </Text>
+                {isRejected && rejectionReason ? (
+                  <View style={styles.reasonBox}>
+                    <Text style={styles.reasonLabel}>REASON</Text>
+                    <Text style={styles.reasonText}>{`"${rejectionReason}"`}</Text>
+                  </View>
+                ) : null}
+              </View>
+              {isRejected ? (
+                <LoginPrimaryButton accent={ACCENT} accentPressed={ACCENT_PRESSED}
+                  label="Re-apply Now"
+                  onPress={() => {
+                    const digits = String(authData?.phone || "").replace(/\D/g, "")
+                    sessionStorage.setItem("deliveryNeedsRegistration", "true")
+                    sessionStorage.setItem("deliverySignupDetails", JSON.stringify({ name: "", phone: digits.slice(-10), countryCode: "+91" }))
+                    navigate("/food/delivery/signup/details", { replace: true })
+                  }}
+                />
+              ) : null}
             </View>
-            <GradientTitle text="Delivery Partner" />
-            <View style={styles.subtitleWrap}>
-              {showLoginStep ? (
-                <Text style={styles.subtitle}>Enter your registered mobile number to start earning</Text>
-              ) : showNameInput ? (
-                <Text style={styles.subtitle}>You&apos;re almost done! Please tell us your name to complete registration.</Text>
-              ) : (
-                <View style={styles.sentRow}>
-                  <Text style={styles.sentText} numberOfLines={1}>{`We've sent a code to ${getPhoneNumber()}`}</Text>
-                  <Pressable
-                    onPress={handleBackToLogin}
-                    accessibilityLabel="Edit phone number"
-                    style={({ pressed }) => [styles.pencilBtn, pressed && { transform: [{ scale: 0.95 }] }]}
-                  >
-                    <LinearGradient colors={[BLUE, NAVY]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.pencilInner}>
-                      <Pencil size={14} color="#ffffff" strokeWidth={2.5} />
-                    </LinearGradient>
-                  </Pressable>
-                </View>
-              )}
-            </View>
-          </View>
-
-          <Animated.View style={stepStyle}>
-            {showLoginStep ? (
-              <View style={{ gap: 24 }}>
-                <View style={[styles.phoneField, focusedField === "phone" && styles.fieldFocused]}>
-                  <View style={styles.ccWrap} pointerEvents="none">
-                    <Text style={styles.cc}>+91</Text>
-                  </View>
-                  <TextInput
-                    ref={phoneInputRef}
-                    keyboardType="phone-pad"
-                    inputMode="tel"
-                    autoComplete="tel-national"
-                    textContentType="telephoneNumber"
-                    value={phone}
-                    onChangeText={(value) => setPhone(String(value).replace(/\D/g, "").slice(0, 10))}
-                    maxLength={10}
-                    onFocus={() => setFocusedField("phone")}
-                    onBlur={() => setFocusedField(null)}
-                    onSubmitEditing={() => !(loading || phone.length < 10) && handleSendOTP()}
-                    returnKeyType="done"
-                    style={styles.phoneInput}
-                    placeholder="Mobile number"
-                    placeholderTextColor={colors.gray[400]}
-                  />
-                </View>
-
-                <GradientButton onPress={handleSendOTP} disabled={loading || phone.length < 10}>
-                  {loading ? <Spinner /> : <Text style={styles.btnText}>Log in</Text>}
-                </GradientButton>
-              </View>
-            ) : (
-              <View style={{ width: "100%" }}>
-                {/* Pending/Rejected Screen */}
-                {pendingMessage ? (
-                  <View style={[styles.pendingCard, isRejected ? styles.pendingRejected : styles.pendingAmber]}>
-                    <View style={{ gap: 8 }}>
-                      <Text style={[styles.pendingTitle, { color: isRejected ? colors.red[700] : colors.amber[700] }]}>
-                        {isRejected ? "APPLICATION REJECTED" : "PENDING VERIFICATION"}
-                      </Text>
-                      <Text style={[styles.pendingMsg, { color: alpha(isRejected ? colors.red[600] : colors.amber[600], 0.9) }]}>
-                        {pendingMessage}
-                      </Text>
-                      {isRejected && rejectionReason ? (
-                        <View style={styles.reasonBox}>
-                          <Text style={styles.reasonLabel}>REASON</Text>
-                          <Text style={styles.reasonText}>{`"${rejectionReason}"`}</Text>
-                        </View>
-                      ) : null}
-                    </View>
-
-                    <View style={{ gap: 12, paddingTop: 8 }}>
-                      {isRejected ? (
-                        <GradientButton
-                          onPress={() => {
-                            const pVal = authData?.phone || ""
-                            const digits = String(pVal).replace(/\D/g, "")
-                            sessionStorage.setItem("deliveryNeedsRegistration", "true")
-                            const details = {
-                              name: "",
-                              phone: digits.slice(-10),
-                              countryCode: "+91",
-                            }
-                            sessionStorage.setItem("deliverySignupDetails", JSON.stringify(details))
-                            navigate("/food/delivery/signup/details", { replace: true })
-                          }}
-                        >
-                          <Text style={[styles.btnText, { fontWeight: "600" }]}>Re-apply Now</Text>
-                        </GradientButton>
-                      ) : null}
-
-                      <GradientButton onPress={handleBackToLogin}>
-                        <Text style={styles.btnText}>Back to login</Text>
-                      </GradientButton>
-                    </View>
-                  </View>
-                ) : null}
-
-                {/* OTP fields */}
-                {!showNameInput && !pendingMessage ? (
-                  <View style={{ gap: 24 }}>
-                    {error ? <Text style={styles.error}>{error}</Text> : null}
-
-                    <View style={styles.otpRow}>
-                      {[0, 1, 2, 3].map((index) => (
-                        <TextInput
-                          key={index}
-                          ref={(el) => {
-                            inputRefs.current[index] = el
-                          }}
-                          keyboardType="number-pad"
-                          inputMode="numeric"
-                          autoComplete={index === 0 ? "sms-otp" : "off"}
-                          textContentType={index === 0 ? "oneTimeCode" : "none"}
-                          editable={!(loading || blockTimer > 0)}
-                          value={otp[index]}
-                          onChangeText={(text) => handleChange(index, text)}
-                          onKeyPress={(e) => handleKeyDown(index, e)}
-                          onFocus={() => setFocusedField(`otp-${index}`)}
-                          onBlur={() => setFocusedField(null)}
-                          selectTextOnFocus
-                          caretHidden={false}
-                          style={[
-                            styles.otpBox,
-                            focusedField === `otp-${index}` && styles.fieldFocused,
-                            blockTimer > 0 && styles.otpBlocked,
-                          ]}
-                          placeholder="•"
-                          placeholderTextColor={colors.gray[400]}
-                        />
-                      ))}
-                    </View>
-
-                    <View style={{ alignItems: "center", gap: 16 }}>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                        {blockTimer > 0 ? (
-                          <Text style={styles.resendMuted}>RESEND SMS</Text>
-                        ) : resendTimer > 0 ? (
-                          <Text style={styles.resendMuted}>
-                            {"Resend SMS in "}
-                            <Text style={styles.resendTime}>{formatResendTimer(resendTimer)}</Text>
-                          </Text>
-                        ) : (
-                          <Pressable onPress={handleResend} hitSlop={8}>
-                            <Text style={styles.resendLink}>Didn&apos;t receive SMS? Resend SMS</Text>
-                          </Pressable>
-                        )}
-                      </View>
-                    </View>
-
-                    <GradientButton
-                      onPress={() => handleVerify()}
-                      disabled={loading || !isOtpComplete || blockTimer > 0}
-                      style={{ marginTop: 16 }}
-                    >
-                      {loading ? (
-                        <View style={styles.rowCenter}>
-                          <Spinner />
-                          <Text style={styles.btnText}>Verifying...</Text>
-                        </View>
-                      ) : (
-                        <Text style={styles.btnText}>Verify & Continue</Text>
-                      )}
-                    </GradientButton>
-
-                    {blockTimer > 0 ? (
-                      <View style={styles.blockBox}>
-                        <Text style={styles.blockTitle}>TOO MANY FAILED ATTEMPTS</Text>
-                        <Text style={styles.blockTime}>
-                          {`Try again after ${Math.floor((blockTimer - 1) / 60)}:${String((blockTimer - 1) % 60).padStart(2, "0")}`}
-                        </Text>
-                      </View>
-                    ) : null}
-                  </View>
-                ) : null}
-
-                {/* Name field */}
-                {showNameInput ? (
-                  <View style={{ gap: 24 }}>
-                    <View style={{ gap: 8 }}>
-                      <Text style={styles.nameLabel}>Full name</Text>
-                      <TextInput
-                        value={name}
-                        onChangeText={(value) => {
-                          setName(value)
-                          if (nameError) setNameError("")
-                        }}
-                        editable={!loading}
-                        onFocus={() => setFocusedField("name")}
-                        onBlur={() => setFocusedField(null)}
-                        placeholder="Enter your name"
-                        placeholderTextColor={colors.gray[400]}
-                        style={[
-                          styles.nameInput,
-                          focusedField === "name" && styles.fieldFocused,
-                          nameError ? { borderColor: colors.red[500] } : null,
-                        ]}
-                      />
-                      {nameError ? <Text style={styles.nameError}>{nameError}</Text> : null}
-                    </View>
-
-                    <GradientButton onPress={handleSubmitName} disabled={loading || !name.trim()} style={{ marginTop: 16 }}>
-                      {loading ? (
-                        <View style={styles.rowCenter}>
-                          <Spinner />
-                          <Text style={styles.btnText}>Continuing...</Text>
-                        </View>
-                      ) : (
-                        <Text style={styles.btnText}>Continue</Text>
-                      )}
-                    </GradientButton>
-                  </View>
-                ) : null}
-              </View>
-            )}
-          </Animated.View>
-
-          {/* Footer Info - only on login step, not OTP */}
-          {!isOtpStep ? (
-            <View style={{ marginTop: 32, alignItems: "center" }}>
-              <Text style={styles.legal}>By continuing, you agree to our</Text>
-              <View style={styles.legalRow}>
-                <Link to="/food/delivery/terms" state={{ from: "/food/delivery/login" }}>
-                  <Text style={styles.legalLink}>TERMS</Text>
-                </Link>
-                <Text style={styles.legalDot}>•</Text>
-                <Link to="/food/delivery/privacy" state={{ from: "/food/delivery/login" }}>
-                  <Text style={styles.legalLink}>PRIVACY</Text>
-                </Link>
-                <Text style={styles.legalDot}>•</Text>
-                <Link to="/food/delivery/help/content" state={{ from: "/food/delivery/login" }}>
-                  <Text style={styles.legalLink}>SUPPORT</Text>
-                </Link>
-              </View>
+          ) : showNameInput ? (
+            <View style={{ marginTop: 32, gap: 16, paddingHorizontal: 12 }}>
+              <Text style={styles.nameLabel}>Full name</Text>
+              <TextInput
+                value={name}
+                onChangeText={(value) => {
+                  setName(value)
+                  if (nameError) setNameError("")
+                }}
+                editable={!loading}
+                placeholder="Enter your name"
+                placeholderTextColor="#AFB4C0"
+                style={[loginStyles.field, styles.nameInput, nameError ? { borderColor: colors.red[500] } : null]}
+              />
+              {nameError ? <Text style={styles.nameError}>{nameError}</Text> : null}
+              {error ? <Text style={styles.nameError}>{error}</Text> : null}
+              <LoginPrimaryButton accent={ACCENT} accentPressed={ACCENT_PRESSED} label="Continue" onPress={handleSubmitName} loading={loading} disabled={!name.trim()} />
             </View>
           ) : null}
-        </View>
-      </KeyboardAwareScrollView>
+        </LoginOtpScreen>
+      )}
 
       {/* Restore/New Account Popup */}
       <Dialog open={showRestorePopup} onClose={closeRestorePopup} backdropOpacity={0.6} style={styles.restoreCard}>
@@ -1062,23 +776,26 @@ export default function DeliverySignIn() {
         </Pressable>
 
         <View style={styles.restoreIcon}>
-          <ShieldCheck size={40} color={BLUE} />
+          <Phone size={40} color="#DC2626" />
         </View>
 
         <Text style={styles.restoreTitle}>Account Found!</Text>
         <Text style={styles.restoreText}>
-          {"An existing deleted delivery account for "}
+          {"A deleted delivery account for "}
           <Text style={{ fontWeight: "700", color: colors.gray[900] }}>{getPhoneNumber()}</Text>
           {" was found. Do you want to restore your old data or start fresh with a new account?"}
         </Text>
 
         <View style={{ gap: 16 }}>
-          <GradientButton onPress={() => handleRestoreAction("restore")} radius={16} height={56}>
-            <Text style={[styles.btnText, { fontWeight: "700" }]}>Restore My Account</Text>
-          </GradientButton>
+          <Pressable
+            onPress={() => handleRestoreAction("restore")}
+            style={({ pressed }) => [styles.restoreBtn, pressed && { backgroundColor: "#B91C1C" }]}
+          >
+            <Text style={styles.restoreBtnText}>Restore My Account</Text>
+          </Pressable>
           <Pressable
             onPress={() => handleRestoreAction("new")}
-            style={({ pressed }) => [styles.newAccountBtn, pressed && { transform: [{ scale: 0.98 }], backgroundColor: colors.gray[50] }]}
+            style={({ pressed }) => [styles.newAccountBtn, pressed && { backgroundColor: colors.gray[50] }]}
           >
             <Text style={styles.newAccountText}>Create New Account</Text>
           </Pressable>
@@ -1089,102 +806,25 @@ export default function DeliverySignIn() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.white, overflow: "hidden" },
-  fill: { flex: 1 },
-  wave: { position: "absolute", left: 0, right: 0 },
-  main: { flexGrow: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 17.6, paddingTop: 48, paddingBottom: 96 },
-  column: { width: "100%", maxWidth: 384, top: -40 },
-  header: { marginBottom: 20, alignItems: "center" },
-  logoBox: { marginBottom: 12, borderRadius: 12, backgroundColor: colors.white, ...shadow.md },
-  logo: { height: 56, width: Math.round((56 * 900) / 364), borderRadius: 12, overflow: "hidden" },
-  title: { fontFamily: fonts.sora, fontWeight: "800", fontSize: 25, lineHeight: 34, letterSpacing: -0.4, color: BLUE, textAlign: "center" },
-  subtitleWrap: { maxWidth: 310, paddingHorizontal: 16, marginTop: 12, alignItems: "center" },
-  subtitle: { fontFamily: fonts.outfit, fontWeight: "500", fontSize: 13.5, lineHeight: 22, letterSpacing: 0.3, color: colors.slate[600], textAlign: "center" },
-  sentRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 8 },
-  sentText: { fontFamily: fonts.outfit, fontWeight: "600", fontSize: 13, lineHeight: 21, letterSpacing: 0.2, color: alpha(colors.slate[500], 0.9), flexShrink: 1 },
-  pencilBtn: { marginLeft: 4, borderRadius: 10, ...shadow.md, shadowColor: BLUE },
-  pencilInner: { padding: 6, borderRadius: 10 },
-  phoneField: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.gray[50],
-    borderWidth: 2,
-    borderColor: colors.gray[300],
-    borderRadius: 9999,
-    ...shadow.sm,
-  },
-  ccWrap: { paddingLeft: 24, paddingRight: 0 },
-  cc: { fontSize: 14, lineHeight: 20, fontWeight: "500", color: colors.gray[500], paddingRight: 12, borderRightWidth: 1, borderRightColor: colors.gray[300] },
-  phoneInput: { flex: 1, paddingLeft: 12, paddingRight: 24, paddingVertical: 14, fontSize: 16, fontWeight: "500", color: colors.gray[900] },
-  fieldFocused: { backgroundColor: colors.white, borderColor: BLUE },
-  btnShell: { width: "100%" },
-  btnShadow: { elevation: 6, shadowColor: BLUE, shadowOpacity: 0.3, shadowRadius: 20, shadowOffset: { width: 0, height: 8 } },
-  btnInner: { width: "100%", paddingVertical: 14, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8 },
-  btnText: { color: colors.white, fontSize: 16, lineHeight: 24, fontWeight: "500" },
-  rowCenter: { flexDirection: "row", alignItems: "center", gap: 8 },
-  error: { color: colors.red[600], fontSize: 15, fontWeight: "700", textAlign: "center", letterSpacing: 0.4, marginBottom: 16, marginTop: 8 },
-  otpRow: { flexDirection: "row", justifyContent: "space-between", gap: 12 },
-  otpBox: {
-    width: 56,
-    height: 56,
-    textAlign: "center",
-    fontSize: 24,
-    fontWeight: "700",
-    backgroundColor: colors.gray[50],
-    borderWidth: 2,
-    borderColor: colors.gray[300],
-    borderRadius: 20,
-    color: colors.gray[900],
-    ...shadow.sm,
-  },
-  otpBlocked: { opacity: 0.5, borderColor: colors.red[400], backgroundColor: colors.red[50], color: colors.red[800] },
-  resendMuted: { fontSize: 12, lineHeight: 16, color: colors.gray[400], fontFamily: fonts.sora, fontWeight: "800", letterSpacing: 0.6 },
-  resendTime: { color: colors.slate[800], fontFamily: fonts.sora, fontWeight: "900" },
-  resendLink: { fontSize: 12, lineHeight: 16, color: colors.slate[800], fontFamily: fonts.sora, fontWeight: "800" },
-  blockBox: {
-    alignSelf: "center",
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-    backgroundColor: "#E7EFFA",
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#C3D0E1",
-    marginTop: 16,
-    alignItems: "center",
-  },
-  blockTitle: { fontSize: 11, fontWeight: "700", color: BLUE, letterSpacing: 0.6 },
-  blockTime: { fontSize: 14, lineHeight: 20, fontWeight: "700", color: BLUE },
-  nameLabel: { fontSize: 14, lineHeight: 20, fontWeight: "600", color: colors.gray[700], paddingLeft: 12 },
-  nameInput: {
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    backgroundColor: colors.gray[50],
-    borderWidth: 2,
-    borderColor: colors.gray[300],
-    borderRadius: 9999,
-    fontSize: 16,
-    fontWeight: "500",
-    color: colors.gray[900],
-    ...shadow.sm,
-  },
-  nameError: { fontSize: 12, lineHeight: 16, color: colors.red[500], paddingLeft: 12 },
-  pendingCard: { borderRadius: 24, borderWidth: 1, padding: 17.6, gap: 20, ...shadow.lg },
+  root: { flex: 1, backgroundColor: "#000000", overflow: "hidden" },
+  nameLabel: { fontSize: 14, lineHeight: 20, fontWeight: "500", color: colors.gray[700] },
+  nameInput: { paddingHorizontal: 16, fontSize: 18, color: "#1C1C1C", paddingVertical: 0 },
+  nameError: { fontSize: 13, lineHeight: 18, fontWeight: "500", color: colors.red[600] },
+  pendingCard: { marginTop: 32, marginHorizontal: 12, borderRadius: 16, borderWidth: 1, padding: 17.6, gap: 20 },
   pendingRejected: { backgroundColor: colors.red[50], borderColor: colors.red[200] },
   pendingAmber: { backgroundColor: colors.amber[50], borderColor: colors.amber[200] },
-  pendingTitle: { fontSize: 16, lineHeight: 24, fontFamily: fonts.sora, fontWeight: "800", letterSpacing: 0.8, textAlign: "center" },
+  pendingTitle: { fontSize: 16, lineHeight: 24, fontWeight: "800", letterSpacing: 0.8, textAlign: "center" },
   pendingMsg: { fontSize: 14, lineHeight: 22, fontWeight: "500", textAlign: "center" },
   reasonBox: { marginTop: 12, padding: 16, backgroundColor: alpha("#ffffff", 0.7), borderRadius: 16, borderWidth: 1, borderColor: colors.red[100] },
-  reasonLabel: { fontSize: 10, fontFamily: fonts.sora, fontWeight: "900", color: colors.red[600], letterSpacing: 1.5, marginBottom: 4, textAlign: "center" },
+  reasonLabel: { fontSize: 10, fontWeight: "900", color: colors.red[600], letterSpacing: 1.5, marginBottom: 4, textAlign: "center" },
   reasonText: { fontSize: 14, lineHeight: 20, color: colors.red[800], fontStyle: "italic", fontWeight: "500", textAlign: "center" },
-  legal: { fontFamily: fonts.poppins, fontSize: 11, lineHeight: 18, fontWeight: "500", color: alpha(colors.gray[400], 0.8), textAlign: "center" },
-  legalRow: { flexDirection: "row", alignItems: "center", justifyContent: "center" },
-  legalLink: { fontFamily: fonts.poppins, fontSize: 11, lineHeight: 18, fontWeight: "600", color: colors.gray[400], letterSpacing: 0.6 },
-  legalDot: { fontFamily: fonts.poppins, fontSize: 11, lineHeight: 18, fontWeight: "700", color: alpha(colors.gray[400], 0.8), marginHorizontal: 8 },
   restoreCard: { maxWidth: 384, borderRadius: 24, padding: 32, alignItems: "stretch", borderWidth: 1, borderColor: colors.gray[100], backgroundColor: colors.white, ...shadow["2xl"] },
-  restoreClose: { position: "absolute", top: 16, right: 16, padding: 8, borderRadius: 14, zIndex: 2 },
-  restoreIcon: { width: 80, height: 80, borderRadius: 40, backgroundColor: alpha(BLUE, 0.1), alignItems: "center", justifyContent: "center", alignSelf: "center", marginBottom: 24 },
-  restoreTitle: { fontSize: 24, lineHeight: 32, fontWeight: "700", color: colors.gray[900], marginBottom: 12, textAlign: "center", fontFamily: fonts.sora },
+  restoreClose: { position: "absolute", top: 16, right: 16, padding: 8, borderRadius: 12, zIndex: 2 },
+  restoreIcon: { width: 80, height: 80, borderRadius: 40, backgroundColor: alpha("#DC2626", 0.1), alignItems: "center", justifyContent: "center", alignSelf: "center", marginBottom: 24 },
+  restoreTitle: { fontSize: 24, lineHeight: 32, fontWeight: "700", color: colors.gray[900], marginBottom: 12, textAlign: "center" },
   restoreText: { fontSize: 16, lineHeight: 26, color: colors.gray[500], marginBottom: 32, textAlign: "center" },
+  restoreBtn: { height: 56, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: "#DC2626" },
+  restoreBtnText: { fontSize: 16, fontWeight: "700", color: colors.white },
   newAccountBtn: { height: 56, borderWidth: 2, borderColor: colors.gray[200], borderRadius: 16, alignItems: "center", justifyContent: "center" },
   newAccountText: { fontSize: 16, fontWeight: "700", color: colors.gray[700] },
 })

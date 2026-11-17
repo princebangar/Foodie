@@ -537,9 +537,9 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     overflow: 'hidden',
-    borderRadius: radius['2xl'],
-    borderWidth: 1,
-    borderColor: colors.gray[100],
+    // flush with the status header above it (rounded top corners + a border left a thin white gap there)
+    borderBottomLeftRadius: radius['2xl'],
+    borderBottomRightRadius: radius['2xl'],
   },
   pinBox: { width: PIN_BOX, height: PIN_BOX, alignItems: 'center', justifyContent: 'center' },
   pulse: {

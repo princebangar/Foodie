@@ -7,7 +7,7 @@
 // number (web: popstate), on the number step it leaves the app (LoginExitGuard). The FCM token is the native one.
 // The web's Lexend font is not bundled: the app's default font is used.
 import React, { useEffect, useRef, useState } from "react"
-import { Animated, BackHandler, Easing, Modal, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from "react-native"
+import { Animated, BackHandler, Easing, Keyboard, Modal, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { LinearGradient } from "expo-linear-gradient"
 import { BlurView } from "expo-blur"
@@ -442,7 +442,8 @@ export default function UnifiedOTPFastLogin() {
   }
 
   return (
-    <View style={s.root}>
+    // a tap anywhere outside the number box (the banner, the sheet) closes the keyboard and takes the focus away
+    <Pressable style={s.root} onPress={Keyboard.dismiss} accessible={false}>
       <StatusBar style="light" />
       <LoginExitGuard enabled={step === 1} dirty={phoneNumber.length > 0} accent={RED} />
       <LoginImageSlider slider={slider} height={sliderHeight} />
@@ -700,7 +701,7 @@ export default function UnifiedOTPFastLogin() {
           </View>
         </View>
       </Modal>
-    </View>
+    </Pressable>
   )
 }
 

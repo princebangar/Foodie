@@ -176,10 +176,28 @@ function VegToggle({ vegMode, onToggle }) {
   );
 }
 
+// The search placeholder ("Search biryani" -> "Search pizza" every 2 s) keeps its own index: it used to live in the
+// Home page, so every change re-rendered the whole page (and the hidden kept-alive tabs) and taps waited behind it.
+function RotatingPlaceholder({ placeholders, active, s }) {
+  const [index, setIndex] = useState(0);
+  const count = placeholders?.length || 0;
+  useEffect(() => {
+    if (!active || count < 2) return undefined;
+    const id = setInterval(() => setIndex((prev) => (prev + 1) % count), 2000);
+    return () => clearInterval(id);
+  }, [active, count]);
+  return (
+    <Animated.View key={index} entering={placeholderIn} exiting={placeholderOut} style={s.placeholderAnim}>
+      <Text numberOfLines={1} style={s.placeholderText}>
+        {placeholders?.[index] || 'Search'}
+      </Text>
+    </Animated.View>
+  );
+}
+
 export default function HomeHeader({
   location,
   handleSearchFocus,
-  placeholderIndex,
   placeholders,
   vegMode = false,
   handleVegModeChange,
@@ -195,7 +213,6 @@ export default function HomeHeader({
     <FoodHomeHeader
       location={location}
       handleSearchFocus={handleSearchFocus}
-      placeholderIndex={placeholderIndex}
       placeholders={placeholders}
       vegMode={vegMode}
       handleVegModeChange={handleVegModeChange}
@@ -212,7 +229,6 @@ export default function HomeHeader({
 function FoodHomeHeader({
   location,
   handleSearchFocus,
-  placeholderIndex,
   placeholders,
   vegMode,
   handleVegModeChange,
@@ -431,11 +447,7 @@ function FoodHomeHeader({
             <Search size={20} color="#DC2626" strokeWidth={3} style={{ marginRight: sp(2) }} />
 
             <View style={s.placeholderBox}>
-              <Animated.View key={placeholderIndex} entering={placeholderIn} exiting={placeholderOut} style={s.placeholderAnim}>
-                <Text numberOfLines={1} style={s.placeholderText}>
-                  {placeholders?.[placeholderIndex] || 'Search'}
-                </Text>
-              </Animated.View>
+              <RotatingPlaceholder placeholders={placeholders} active={isTabActive} s={s} />
             </View>
 
             <Pressable

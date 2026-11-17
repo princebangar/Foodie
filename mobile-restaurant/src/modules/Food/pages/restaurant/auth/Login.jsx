@@ -1,20 +1,16 @@
-// Web: modules/Food/pages/restaurant/auth/Login.jsx — phone + OTP login of the restaurant partner (both the /login and
-// the /otp route render this screen; the step is read from the path). Native fixes from the delivery app's login
-// (mobile-delivery DeliveryV2/pages/auth/SignIn.jsx): keyboard-closed page height + KeyboardAwareScrollView, the red
-// waves scroll with the form, plain #B80B3D title, LoginExitGuard, OTP boxes kept in a ref, keyboard closed after the
-// last digit / on unmount, first box refocused after a wrong code.
+// Restaurant partner login: same look as the customer app login (admin images slider + white sheet, then the white
+// "OTP Verification" page; modules/auth/components/PartnerLogin.jsx). Both /food/restaurant/login and
+// /food/restaurant/otp render this screen; the step is read from the path. The API calls, session keys and navigation
+// are the restaurant ones (web: modules/Food/pages/restaurant/auth/Login.jsx).
 import React, { useCallback, useEffect, useRef, useState } from "react"
-import { Animated, Easing, Keyboard, Pressable, StyleSheet, View, useWindowDimensions } from "react-native"
+import { Keyboard, Pressable, StyleSheet, View } from "react-native"
 import { useFocusEffect } from "expo-router"
-import Svg, { Defs, LinearGradient as SvgGradient, Path, Stop } from "react-native-svg"
-import { LinearGradient } from "expo-linear-gradient"
-import { Loader2, Pencil, X, ShieldCheck } from "lucide-react-native"
-import { useNavigate, Link, useLocation, router } from "@/lib/router"
+import { Phone, X } from "lucide-react-native"
+import { useNavigate, useLocation, router } from "@/lib/router"
 import { toast } from "@/lib/toast"
-import { AppImage, Dialog, KeyboardAwareScrollView, Text, TextInput } from "@/native/ui"
-import { StatusBar } from "@/native/ui/SectionStatusBar"
+import { Dialog, Text } from "@/native/ui"
 import { LoginExitGuard } from "@/native/ui/LoginExitGuard"
-import { alpha, colors, fonts, restaurantTheme, shadow } from "@/theme"
+import { alpha, colors, restaurantTheme, shadow } from "@/theme"
 import { restaurantAPI } from "@food/api"
 import {
   setAuthData as setRestaurantAuthData,
@@ -28,11 +24,12 @@ import { collectFcmTokenFast, persistModuleFcmToken } from "@food/utils/firebase
 import { prefetchPolicyContentWhenIdle } from "@/shared/utils/policyPages"
 import { hardNavigate } from "@/shared/utils/nativeShell"
 import { requestPhoneFocus, usePhoneFocusRequest } from "@/shared/utils/loginFocus"
+import { LoginNumberScreen, LoginOtpScreen } from "@/modules/auth/components/PartnerLogin"
 
-const LOGIN_LOGO = require("../../../../../assets/public/images/logo.webp")
 const DEFAULT_COUNTRY_CODE = "+91"
-const RED = restaurantTheme.brand // #B80B3D
-const RED_DARK = restaurantTheme.brandDark // #66001D
+// the app theme colour on the login (Continue button, OTP links, banner backdrop)
+const ACCENT = restaurantTheme.brand // #B80B3D
+const ACCENT_PRESSED = "#8A0A2E"
 
 // The onboarding screen keeps picked photos under this sessionStorage prefix (the web's IndexedDB
 // "RestaurantOnboardingFiles", which clearAllFilesFromDB deletes on the web): cleared together here.
@@ -50,95 +47,10 @@ const clearOnboardingFileStore = () => {
   }
 }
 
-/** Loader2 + animate-spin */
-function Spinner({ color = "#ffffff", size = 20 }) {
-  const spin = useRef(new Animated.Value(0)).current
-  useEffect(() => {
-    const loop = Animated.loop(Animated.timing(spin, { toValue: 1, duration: 1000, easing: Easing.linear, useNativeDriver: true }))
-    loop.start()
-    return () => loop.stop()
-  }, [spin])
-  const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] })
-  return (
-    <Animated.View style={{ transform: [{ rotate }] }}>
-      <Loader2 size={size} color={color} />
-    </Animated.View>
-  )
-}
-
-/** bg-gradient-to-r from-[#B80B3D] to-[#66001D] rounded-full button (disabled:opacity-50) */
-function GradientButton({ onPress, disabled, children, style, radius = 9999, height }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      style={({ pressed }) => [
-        styles.btnShell,
-        { borderRadius: radius },
-        !disabled && styles.btnShadow,
-        disabled && { opacity: 0.5 },
-        pressed && !disabled && { transform: [{ scale: 0.98 }] },
-        style,
-      ]}
-    >
-      <LinearGradient
-        colors={[RED, RED_DARK]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={[styles.btnInner, { borderRadius: radius }, height ? { height, paddingVertical: 0 } : null]}
-      >
-        {children}
-      </LinearGradient>
-    </Pressable>
-  )
-}
-
-// Drawn inside the scrolling content (not fixed behind it): when the keyboard opens and the form scrolls up, the red
-// design moves up with the logo instead of the logo sliding over a fixed wave (delivery app fix, Prince 26 Oct).
-// Web: top wave h-[40vh], bottom wave h-[50vh], both scale 1.05, gradient 135deg #B80B3D -> #66001D.
-function Waves({ height }) {
-  const { width } = useWindowDimensions()
-  const topH = height * 0.4
-  const botH = height * 0.5
-  return (
-    <>
-      <View pointerEvents="none" style={[styles.wave, { top: 0, height: topH, transform: [{ scale: 1.05 }] }]}>
-        <Svg width={width} height={topH} viewBox="0 0 1440 320" preserveAspectRatio="none">
-          <Defs>
-            <SvgGradient id="topRedGrad" x1="0" y1="0" x2="1" y2="1">
-              <Stop offset="0" stopColor={RED} />
-              <Stop offset="1" stopColor={RED_DARK} />
-            </SvgGradient>
-          </Defs>
-          <Path fill="url(#topRedGrad)" d="M -50,-50 L -50,280 C 200,100 800,100 1490,100 L 1490,-50 Z" />
-        </Svg>
-      </View>
-      <View pointerEvents="none" style={[styles.wave, { top: height - botH, height: botH, transform: [{ scale: 1.05 }] }]}>
-        <Svg width={width} height={botH} viewBox="0 0 1440 320" preserveAspectRatio="none">
-          <Defs>
-            <SvgGradient id="botRedGrad" x1="0" y1="0" x2="1" y2="1">
-              <Stop offset="0" stopColor={RED} />
-              <Stop offset="1" stopColor={RED_DARK} />
-            </SvgGradient>
-          </Defs>
-          <Path fill="url(#botRedGrad)" d="M -50,370 L -50,220 C 640,220 1240,220 1490,40 L 1490,370 Z" />
-        </Svg>
-      </View>
-    </>
-  )
-}
-
 export default function RestaurantLogin() {
   const navigate = useNavigate()
   const location = useLocation()
   const isOtpStep = location.pathname.endsWith("/otp")
-  // The page keeps the height it had with the keyboard closed (no re-centring when the window shrinks: the logo must
-  // not jump); only as much scrolls as the number box and the button need.
-  const { height: liveWindowHeight } = useWindowDimensions()
-  const fullHeightRef = useRef(liveWindowHeight)
-  if (liveWindowHeight > fullHeightRef.current) fullHeightRef.current = liveWindowHeight
-  const windowHeight = fullHeightRef.current
-
   // Cleanup onboarding on initial mount only
   useEffect(() => {
     clearOnboardingFromLocalStorage()
@@ -211,7 +123,6 @@ export default function RestaurantLogin() {
   const [contactInfo, setContactInfo] = useState("")
   const [showRestorePopup, setShowRestorePopup] = useState(false)
   const [, setDeletedAccountData] = useState(null)
-  const [focusedField, setFocusedField] = useState(null)
   const inputRefs = useRef([])
   const hasSubmittedRef = useRef(false)
   const isSuccessRef = useRef(false)
@@ -638,8 +549,8 @@ export default function RestaurantLogin() {
 
   const afterOtpUpdate = (newOtp, nextIndex) => {
     if (newOtp.every((digit) => digit !== "")) {
-      // last digit in: put the keyboard away so "Verify & Continue" is in view
-      Keyboard.dismiss()
+      // last digit in: verify straight away (customer login)
+      handleVerify(newOtp.join(""))
     } else if (nextIndex != null) {
       inputRefs.current[nextIndex]?.focus()
     }
@@ -695,228 +606,55 @@ export default function RestaurantLogin() {
     }
   }
 
-  const formatResendTimer = (seconds) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`
-  }
-
-  const isOtpComplete = otp.every((digit) => digit !== "")
-
   const showLoginStep = !isOtpStep
-
-  // step change slide (web: framer-motion opacity 0 -> 1, x ±20, 0.3 s). Not on the first open: after a log-out the
-  // form is there at once (Prince, 27 Oct: the fade-in read as a blink).
-  const stepAnim = useRef(new Animated.Value(1)).current
-  const stepAnimFirst = useRef(true)
-  useEffect(() => {
-    if (stepAnimFirst.current) {
-      stepAnimFirst.current = false
-      return
-    }
-    stepAnim.setValue(0)
-    Animated.timing(stepAnim, { toValue: 1, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start()
-  }, [stepAnim, showLoginStep])
-  const stepStyle = {
-    opacity: stepAnim,
-    transform: [{ translateX: stepAnim.interpolate({ inputRange: [0, 1], outputRange: [showLoginStep ? -20 : 20, 0] }) }],
-  }
-
-  // web: motion.div opacity 0 -> 1, y -6 -> 0 for the error line
-  const errorAnim = useRef(new Animated.Value(0)).current
-  useEffect(() => {
-    if (!otpError) return
-    errorAnim.setValue(0)
-    Animated.timing(errorAnim, { toValue: 1, duration: 250, useNativeDriver: true }).start()
-  }, [otpError, errorAnim])
 
   const closeRestorePopup = () => {
     setShowRestorePopup(false)
     goToLoginScreen()
   }
 
+  const otpPhoneLabel = `+91-${String(authData?.phone || contactInfo || phone).replace(/\D/g, "").slice(-10)}`
+
   return (
     <View style={styles.root}>
-      <StatusBar style="light" />
-      <LoginExitGuard enabled={showLoginStep} dirty={phone.length > 0} accent={RED} />
+      <LoginExitGuard enabled={showLoginStep} dirty={phone.length > 0} accent={ACCENT} />
 
-      {/* Main Content (the focused field and the button under it stay above the keyboard) */}
-      <KeyboardAwareScrollView
-        style={styles.fill}
-        extraOffset={showLoginStep ? 96 : 120}
-        contentContainerStyle={[styles.main, { minHeight: windowHeight }]}
-        showsVerticalScrollIndicator={false}
-      >
-        <Waves height={windowHeight} />
-        <View style={styles.column}>
-          {/* Logo & Header */}
-          <View style={styles.header}>
-            {/* web: /logo.webp banner, h-14 w-auto mb-3 rounded-xl shadow-md */}
-            <View style={styles.logoBox}>
-              <AppImage src={LOGIN_LOGO} style={styles.logo} contentFit="contain" accessibilityLabel="Foodie Logo" />
-            </View>
-            <Text style={styles.title}>Restaurant Partner</Text>
-            <View style={styles.subtitleWrap}>
-              {showLoginStep ? (
-                <Text style={styles.subtitle}>
-                  Enter your registered mobile number to manage your restaurant
-                </Text>
-              ) : (
-                <View style={styles.sentRow}>
-                  <Text style={styles.sentText} numberOfLines={1}>{`We've sent a code to ${contactInfo}`}</Text>
-                  <Pressable
-                    onPress={() => {
-                      requestPhoneFocus()
-                      goToLoginScreen()
-                    }}
-                    accessibilityLabel="Edit phone number"
-                    style={({ pressed }) => [styles.pencilBtn, pressed && { transform: [{ scale: 0.95 }] }]}
-                  >
-                    <LinearGradient colors={[RED, RED_DARK]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.pencilInner}>
-                      <Pencil size={14} color="#ffffff" strokeWidth={2.5} />
-                    </LinearGradient>
-                  </Pressable>
-                </View>
-              )}
-            </View>
-          </View>
-
-          <Animated.View style={stepStyle}>
-            {showLoginStep ? (
-              // Step 1: Mobile Form
-              <View style={{ gap: 24 }}>
-                <View style={[styles.phoneField, focusedField === "phone" && styles.fieldFocused]}>
-                  <View style={styles.ccWrap} pointerEvents="none">
-                    <Text style={styles.cc}>+91</Text>
-                  </View>
-                  <TextInput
-                    ref={phoneInputRef}
-                    keyboardType="phone-pad"
-                    inputMode="tel"
-                    autoComplete="tel-national"
-                    textContentType="telephoneNumber"
-                    value={phone}
-                    onChangeText={(value) => setPhone(String(value).replace(/\D/g, "").slice(0, 10))}
-                    maxLength={10}
-                    onFocus={() => setFocusedField("phone")}
-                    onBlur={() => setFocusedField(null)}
-                    onSubmitEditing={() => !(loading || phone.length < 10) && handleSendOTP()}
-                    returnKeyType="done"
-                    style={styles.phoneInput}
-                    placeholder="Mobile number"
-                    placeholderTextColor={colors.gray[400]}
-                  />
-                </View>
-
-                <GradientButton onPress={() => handleSendOTP()} disabled={loading || phone.length < 10}>
-                  {loading ? <Spinner /> : <Text style={styles.btnText}>Log in</Text>}
-                </GradientButton>
-              </View>
-            ) : (
-              // Step 2: OTP Verification Form
-              <View style={{ gap: 24 }}>
-                {otpError ? (
-                  <Animated.View
-                    style={{ opacity: errorAnim, transform: [{ translateY: errorAnim.interpolate({ inputRange: [0, 1], outputRange: [-6, 0] }) }] }}
-                  >
-                    <Text style={styles.error}>{otpError}</Text>
-                  </Animated.View>
-                ) : null}
-
-                <View style={styles.otpRow}>
-                  {[0, 1, 2, 3].map((index) => (
-                    <TextInput
-                      key={index}
-                      ref={(el) => {
-                        inputRefs.current[index] = el
-                      }}
-                      keyboardType="number-pad"
-                      inputMode="numeric"
-                      autoComplete={index === 0 ? "sms-otp" : "off"}
-                      textContentType={index === 0 ? "oneTimeCode" : "none"}
-                      editable={!(loading || blockTimer > 0)}
-                      value={otp[index]}
-                      onChangeText={(text) => handleChange(index, text)}
-                      onKeyPress={(e) => handleKeyDown(index, e)}
-                      onFocus={() => setFocusedField(`otp-${index}`)}
-                      onBlur={() => setFocusedField(null)}
-                      selectTextOnFocus
-                      style={[
-                        styles.otpBox,
-                        focusedField === `otp-${index}` && styles.fieldFocused,
-                        blockTimer > 0 && styles.otpBlocked,
-                      ]}
-                      placeholder="•"
-                      placeholderTextColor={colors.gray[400]}
-                    />
-                  ))}
-                </View>
-
-                <View style={{ alignItems: "center", gap: 16 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    {blockTimer > 0 ? (
-                      <Text style={[styles.resendMuted, { letterSpacing: 0.6 }]}>RESEND SMS</Text>
-                    ) : resendTimer > 0 ? (
-                      <Text style={styles.resendMuted}>
-                        {"Resend SMS in "}
-                        <Text style={styles.resendTime}>{formatResendTimer(resendTimer)}</Text>
-                      </Text>
-                    ) : (
-                      <Pressable onPress={handleResend} hitSlop={8}>
-                        <Text style={styles.resendLink}>Didn&apos;t receive SMS? Resend SMS</Text>
-                      </Pressable>
-                    )}
-                  </View>
-                </View>
-
-                <GradientButton
-                  onPress={() => handleVerify()}
-                  disabled={loading || !isOtpComplete || blockTimer > 0}
-                  style={{ marginTop: 16 }}
-                >
-                  {loading ? (
-                    <View style={styles.rowCenter}>
-                      <Spinner />
-                      <Text style={styles.btnText}>Verifying...</Text>
-                    </View>
-                  ) : (
-                    <Text style={styles.btnText}>Verify & Continue</Text>
-                  )}
-                </GradientButton>
-
-                {blockTimer > 0 ? (
-                  <View style={styles.blockBox}>
-                    <Text style={styles.blockTitle}>TOO MANY FAILED ATTEMPTS</Text>
-                    <Text style={styles.blockTime}>
-                      {`Try again after ${Math.floor((blockTimer - 1) / 60)}:${String((blockTimer - 1) % 60).padStart(2, "0")}`}
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
-            )}
-          </Animated.View>
-
-          {/* Footer Info - only on login step, not OTP */}
-          {!isOtpStep ? (
-            <View style={{ marginTop: 32, alignItems: "center" }}>
-              <Text style={styles.legal}>By continuing, you agree to our</Text>
-              <View style={styles.legalRow}>
-                <Link to="/food/restaurant/terms" state={{ from: "/food/restaurant/login" }}>
-                  <Text style={styles.legalLink}>TERMS</Text>
-                </Link>
-                <Text style={styles.legalDot}>•</Text>
-                <Link to="/food/restaurant/privacy" state={{ from: "/food/restaurant/login" }}>
-                  <Text style={styles.legalLink}>PRIVACY</Text>
-                </Link>
-                <Text style={styles.legalDot}>•</Text>
-                <Link to="/food/restaurant/help-content" state={{ from: "/food/restaurant/login" }}>
-                  <Text style={styles.legalLink}>SUPPORT</Text>
-                </Link>
-              </View>
-            </View>
-          ) : null}
-        </View>
-      </KeyboardAwareScrollView>
+      {showLoginStep ? (
+        <LoginNumberScreen
+          appType="restaurant"
+          phone={phone}
+          onPhoneChange={setPhone}
+          phoneInputRef={phoneInputRef}
+          onContinue={() => handleSendOTP()}
+          loading={loading}
+          accent={ACCENT}
+          accentPressed={ACCENT_PRESSED}
+          legalFrom="/food/restaurant/login"
+          legalLinks={[
+            { to: "/food/restaurant/terms", label: "Terms of Service" },
+            { to: "/food/restaurant/privacy", label: "Privacy Policy" },
+            { to: "/food/restaurant/help-content", label: "Support" },
+          ]}
+        />
+      ) : (
+        <LoginOtpScreen
+          phoneLabel={otpPhoneLabel}
+          otp={otp}
+          inputRefs={inputRefs}
+          onOtpChange={handleChange}
+          onOtpKeyPress={handleKeyDown}
+          loading={loading}
+          otpError={otpError}
+          blockTimer={blockTimer}
+          resendTimer={resendTimer}
+          onResend={handleResend}
+          accent={ACCENT}
+          onBack={() => {
+            requestPhoneFocus()
+            goToLoginScreen()
+          }}
+        />
+      )}
 
       {/* Restore/New Account Popup */}
       <Dialog open={showRestorePopup} onClose={closeRestorePopup} backdropOpacity={0.6} style={styles.restoreCard}>
@@ -929,23 +667,26 @@ export default function RestaurantLogin() {
         </Pressable>
 
         <View style={styles.restoreIcon}>
-          <ShieldCheck size={40} color={RED} />
+          <Phone size={40} color="#DC2626" />
         </View>
 
         <Text style={styles.restoreTitle}>Restaurant Found!</Text>
         <Text style={styles.restoreText}>
-          {"An existing deleted restaurant for "}
+          {"A deleted restaurant for "}
           <Text style={{ fontWeight: "700", color: colors.gray[900] }}>{contactInfo}</Text>
           {" was found. Do you want to restore your old data or start fresh with a new account?"}
         </Text>
 
         <View style={{ gap: 16 }}>
-          <GradientButton onPress={() => handleRestoreAction("restore")} radius={16} height={56}>
-            <Text style={[styles.btnText, { fontWeight: "700" }]}>Restore My Account</Text>
-          </GradientButton>
+          <Pressable
+            onPress={() => handleRestoreAction("restore")}
+            style={({ pressed }) => [styles.restoreBtn, pressed && { backgroundColor: "#B91C1C" }]}
+          >
+            <Text style={styles.restoreBtnText}>Restore My Account</Text>
+          </Pressable>
           <Pressable
             onPress={() => handleRestoreAction("new")}
-            style={({ pressed }) => [styles.newAccountBtn, pressed && { transform: [{ scale: 0.98 }], backgroundColor: colors.gray[50] }]}
+            style={({ pressed }) => [styles.newAccountBtn, pressed && { backgroundColor: colors.gray[50] }]}
           >
             <Text style={styles.newAccountText}>Create New Account</Text>
           </Pressable>
@@ -956,82 +697,14 @@ export default function RestaurantLogin() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.white, overflow: "hidden" },
-  fill: { flex: 1 },
-  wave: { position: "absolute", left: 0, right: 0 },
-  main: { flexGrow: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24, paddingTop: 48, paddingBottom: 96 },
-  column: { width: "100%", maxWidth: 384, top: -40 },
-  header: { marginBottom: 20, alignItems: "center" },
-  logoBox: { marginBottom: 12, borderRadius: 12, backgroundColor: colors.white, ...shadow.md },
-  logo: { height: 56, width: Math.round((56 * 900) / 364), borderRadius: 12, overflow: "hidden" },
-  // web: text-[25px] font-extrabold text-[#B80B3D] tracking-tight font-['Outfit']
-  title: { fontFamily: fonts.outfit, fontWeight: "800", fontSize: 25, lineHeight: 34, letterSpacing: -0.6, color: RED, textAlign: "center" },
-  subtitleWrap: { maxWidth: 310, paddingHorizontal: 16, marginTop: 12, alignItems: "center" },
-  subtitle: { fontFamily: fonts.outfit, fontWeight: "500", fontSize: 13.5, lineHeight: 22, letterSpacing: 0.3, color: colors.slate[600], textAlign: "center" },
-  sentRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 8 },
-  sentText: { fontFamily: fonts.outfit, fontWeight: "600", fontSize: 13, lineHeight: 21, letterSpacing: 0.2, color: alpha(colors.slate[500], 0.9), flexShrink: 1 },
-  pencilBtn: { marginLeft: 4, borderRadius: 10, ...shadow.md, shadowColor: RED },
-  pencilInner: { padding: 6, borderRadius: 10 },
-  phoneField: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.gray[50],
-    borderWidth: 2,
-    borderColor: colors.gray[300],
-    borderRadius: 9999,
-    ...shadow.sm,
-  },
-  ccWrap: { paddingLeft: 24, paddingRight: 0 },
-  cc: { fontSize: 14, lineHeight: 20, fontWeight: "500", color: colors.gray[500], paddingRight: 12, borderRightWidth: 1, borderRightColor: colors.gray[300] },
-  phoneInput: { flex: 1, paddingLeft: 12, paddingRight: 24, paddingVertical: 14, fontSize: 16, fontWeight: "500", color: colors.gray[900] },
-  fieldFocused: { backgroundColor: colors.white, borderColor: RED },
-  btnShell: { width: "100%" },
-  btnShadow: { elevation: 6, shadowColor: RED, shadowOpacity: 0.3, shadowRadius: 20, shadowOffset: { width: 0, height: 8 } },
-  btnInner: { width: "100%", paddingVertical: 14, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8 },
-  btnText: { color: colors.white, fontSize: 16, lineHeight: 24, fontWeight: "500" },
-  rowCenter: { flexDirection: "row", alignItems: "center", gap: 8 },
-  error: { color: colors.red[600], fontSize: 15, fontWeight: "700", textAlign: "center", letterSpacing: 0.4, marginBottom: 16, marginTop: 8 },
-  otpRow: { flexDirection: "row", justifyContent: "space-between", gap: 12 },
-  otpBox: {
-    width: 56,
-    height: 56,
-    textAlign: "center",
-    fontSize: 24,
-    fontWeight: "700",
-    backgroundColor: colors.gray[50],
-    borderWidth: 2,
-    borderColor: colors.gray[300],
-    borderRadius: 20,
-    color: colors.gray[900],
-    padding: 0,
-    ...shadow.sm,
-  },
-  otpBlocked: { opacity: 0.5, borderColor: colors.red[400], backgroundColor: colors.red[50], color: colors.red[800] },
-  resendMuted: { fontSize: 12, lineHeight: 16, color: colors.gray[400], fontWeight: "800" },
-  resendTime: { color: colors.slate[800], fontWeight: "900" },
-  resendLink: { fontSize: 12, lineHeight: 16, color: colors.slate[800], fontWeight: "800" },
-  blockBox: {
-    alignSelf: "center",
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-    backgroundColor: colors.red[50],
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.red[100],
-    marginTop: 16,
-    alignItems: "center",
-  },
-  blockTitle: { fontSize: 11, fontWeight: "700", color: RED, letterSpacing: 0.6 },
-  blockTime: { fontSize: 14, lineHeight: 20, fontWeight: "700", color: RED },
-  legal: { fontSize: 11, lineHeight: 18, fontWeight: "500", color: alpha(colors.gray[400], 0.8), textAlign: "center" },
-  legalRow: { flexDirection: "row", alignItems: "center", justifyContent: "center" },
-  legalLink: { fontSize: 11, lineHeight: 18, fontWeight: "600", color: colors.gray[400], letterSpacing: 0.6 },
-  legalDot: { fontSize: 11, lineHeight: 18, fontWeight: "700", color: alpha(colors.gray[400], 0.8), marginHorizontal: 8 },
+  root: { flex: 1, backgroundColor: "#000000", overflow: "hidden" },
   restoreCard: { maxWidth: 384, borderRadius: 24, padding: 32, alignItems: "stretch", borderWidth: 1, borderColor: colors.gray[100], backgroundColor: colors.white, ...shadow["2xl"] },
-  restoreClose: { position: "absolute", top: 16, right: 16, padding: 8, borderRadius: 14, zIndex: 2 },
-  restoreIcon: { width: 80, height: 80, borderRadius: 40, backgroundColor: alpha(RED, 0.1), alignItems: "center", justifyContent: "center", alignSelf: "center", marginBottom: 24 },
+  restoreClose: { position: "absolute", top: 16, right: 16, padding: 8, borderRadius: 12, zIndex: 2 },
+  restoreIcon: { width: 80, height: 80, borderRadius: 40, backgroundColor: alpha("#DC2626", 0.1), alignItems: "center", justifyContent: "center", alignSelf: "center", marginBottom: 24 },
   restoreTitle: { fontSize: 24, lineHeight: 32, fontWeight: "700", color: colors.gray[900], marginBottom: 12, textAlign: "center" },
   restoreText: { fontSize: 16, lineHeight: 26, color: colors.gray[500], marginBottom: 32, textAlign: "center" },
+  restoreBtn: { height: 56, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: "#DC2626" },
+  restoreBtnText: { fontSize: 16, fontWeight: "700", color: colors.white },
   newAccountBtn: { height: 56, borderWidth: 2, borderColor: colors.gray[200], borderRadius: 16, alignItems: "center", justifyContent: "center" },
   newAccountText: { fontSize: 16, fontWeight: "700", color: colors.gray[700] },
 })

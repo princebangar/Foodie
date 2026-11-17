@@ -65,7 +65,7 @@ export default function Settings() {
         </View>
 
         {/* Settings List */}
-        <View style={{ marginTop: sp(6) }}>
+        <View>
           {/* Edit Profile */}
           <Pressable onPress={() => navigate("/food/user/profile/edit")} style={s.item}>
             {({ pressed }) => (
@@ -119,7 +119,7 @@ export default function Settings() {
 const useStyles = makeStyles((t) => ({
   page: { flex: 1, backgroundColor: t.dark ? "#0a0a0a" : colors.white },
   content: { paddingHorizontal: sp(6) },
-  header: { flexDirection: "row", alignItems: "center", gap: sp(4), marginBottom: sp(8) },
+  header: { flexDirection: "row", alignItems: "center", gap: sp(4), marginBottom: sp(4) },
   backButton: {
     height: 44,
     width: 44,

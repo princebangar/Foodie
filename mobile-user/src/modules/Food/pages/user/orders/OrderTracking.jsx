@@ -1890,6 +1890,10 @@ export default function OrderTracking() {
             ? 'Order cancelled successfully. No refund required as payment was not made.'
             : 'Order cancelled successfully. Refund has been added to your Foodie wallet.');
         toast.success(successMessage);
+        // the "order placed" card on home drops this order at once (it only re-read the orders every minute)
+        window.dispatchEvent(new CustomEvent('order-cancelled', {
+          detail: { ids: [order?.id, order?._id, order?.mongoId, order?.orderId, orderId, cancelLookupId].filter(Boolean).map(String) },
+        }));
         setShowCancelDialog(false);
         setCancellationReason("");
         // Refresh order data

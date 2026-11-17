@@ -348,9 +348,11 @@ export default function DiningRestaurantDetails() {
     return cur >= open && cur <= close
   })()
   const isDiningEnabled = restaurant?.diningSettings?.isEnabled !== false
+  // no real photos: the Photos section (and its tab) are left out instead of an empty block
+  const hasPhotos = imageGallery.some(Boolean)
   const topTabs = [
     { id: "menu", label: "Menu", target: "restaurant-menu" },
-    { id: "photos", label: "Photos", target: "restaurant-photos" },
+    ...(hasPhotos ? [{ id: "photos", label: "Photos", target: "restaurant-photos" }] : []),
     { id: "about", label: "About", target: "restaurant-about" },
   ]
 
@@ -426,7 +428,7 @@ export default function DiningRestaurantDetails() {
     sectionY.current[id] = e.nativeEvent.layout.y
   }
 
-  const photos = imageGallery.length > 0 ? imageGallery.slice(0, 4) : menuPreviewImages.slice(0, 2)
+  const photos = imageGallery.filter(Boolean).slice(0, 4)
   const sheetDisabled = remainingSeats === 0 || selectedGuests > remainingSeats
 
   return (
@@ -584,6 +586,7 @@ export default function DiningRestaurantDetails() {
             </View>
           </View>
 
+          {hasPhotos ? (
           <View style={s.sectionDivided} onLayout={recordSection("restaurant-photos")}>
             <Text style={[s.h2, { color: textMain }]}>Photos</Text>
             <View style={[s.grid2, { marginTop: 16 }]}>
@@ -607,6 +610,7 @@ export default function DiningRestaurantDetails() {
               ))}
             </View>
           </View>
+          ) : null}
 
           <View style={s.sectionDivided} onLayout={recordSection("restaurant-about")}>
             <Text style={[s.h2, { color: textMain }]}>About the restaurant</Text>

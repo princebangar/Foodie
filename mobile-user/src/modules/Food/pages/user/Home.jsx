@@ -676,6 +676,184 @@ function usePop(open, from = 0.8) {
   };
 }
 
+// The hero banner slider with its own state: an auto-slide (every 3.5 s) used to re-render the whole Home page 1-3 times
+// per slide, which kept the JS thread busy and made taps feel slow. It slides only while its tab is open.
+const HERO_BANNER_AUTO_SLIDE_MS = 3500;
+function HeroBannerAuto({ heroBannerImages, heroBannersData, zoneId, navigate, s, active }) {
+  const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
+  const [isTransitionEnabled, setIsTransitionEnabled] = useState(true);
+  const isSwiping = useRef(false);
+  const autoSlideIntervalRef = useRef(null);
+
+  // a new banner list (admin change / reload) starts again from the first slide
+  const imagesKey = heroBannerImages.join("|");
+  useEffect(() => {
+    setIsTransitionEnabled(false);
+    setCurrentBannerIndex(0);
+  }, [imagesKey]);
+
+  const startHeroBannerAutoSlide = useCallback(() => {
+    if (autoSlideIntervalRef.current) {
+      clearInterval(autoSlideIntervalRef.current);
+    }
+
+    if (heroBannerImages.length <= 1) return;
+
+    autoSlideIntervalRef.current = setInterval(() => {
+      if (!isSwiping.current) {
+        setIsTransitionEnabled(true);
+        setCurrentBannerIndex((prev) => {
+          if (prev >= heroBannerImages.length) return prev;
+          return prev + 1;
+        });
+      }
+    }, HERO_BANNER_AUTO_SLIDE_MS);
+  }, [heroBannerImages.length]);
+
+  // Handle snap-back when reaching the cloned slide at the end
+  useEffect(() => {
+    if (currentBannerIndex === heroBannerImages.length && heroBannerImages.length > 1) {
+      const timer = setTimeout(() => {
+        setIsTransitionEnabled(false);
+        setCurrentBannerIndex(0);
+      }, 500); // match transition duration
+      return () => clearTimeout(timer);
+    }
+    return undefined;
+  }, [currentBannerIndex, heroBannerImages.length]);
+
+  // Re-enable transition after snap-back
+  useEffect(() => {
+    if (!isTransitionEnabled && currentBannerIndex === 0) {
+      const timer = setTimeout(() => {
+        setIsTransitionEnabled(true);
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+    return undefined;
+  }, [isTransitionEnabled, currentBannerIndex]);
+
+  // Auto-cycle hero banner images (only while this tab is on screen)
+  useEffect(() => {
+    if (!active) return undefined;
+    startHeroBannerAutoSlide();
+
+    return () => {
+      if (autoSlideIntervalRef.current) {
+        clearInterval(autoSlideIntervalRef.current);
+      }
+    };
+  }, [startHeroBannerAutoSlide, active]);
+
+  // Helper function to reset auto-slide timer
+  const resetAutoSlide = useCallback(() => {
+    startHeroBannerAutoSlide();
+  }, [startHeroBannerAutoSlide]);
+
+  // Swipe handlers for hero banner carousel (the web's touch handlers)
+  const handleSwipeStart = () => {
+    isSwiping.current = true;
+  };
+
+  const handleSwipeEnd = (deltaX, deltaYRaw) => {
+    if (!isSwiping.current || heroBannerImages.length === 0) return;
+
+    const deltaY = Math.abs(deltaYRaw);
+    const minSwipeDistance = 50; // Minimum distance for a swipe
+
+    // Check if it's a horizontal swipe (not vertical scroll)
+    if (Math.abs(deltaX) > minSwipeDistance && Math.abs(deltaX) > deltaY) {
+      if (deltaX > 0) {
+        // Swipe right - go to previous image
+        if (currentBannerIndex === 0) {
+          setIsTransitionEnabled(false);
+          setCurrentBannerIndex(heroBannerImages.length);
+          setTimeout(() => {
+            setIsTransitionEnabled(true);
+            setCurrentBannerIndex(heroBannerImages.length - 1);
+          }, 50);
+        } else {
+          setIsTransitionEnabled(true);
+          setCurrentBannerIndex((prev) => prev - 1);
+        }
+      } else {
+        // Swipe left - go to next image
+        setIsTransitionEnabled(true);
+        setCurrentBannerIndex((prev) => {
+          if (prev >= heroBannerImages.length) return prev;
+          return prev + 1;
+        });
+      }
+      // Reset auto-slide timer after manual swipe
+      resetAutoSlide();
+    }
+
+    // Reset swipe state after a short delay
+    setTimeout(() => {
+      isSwiping.current = false;
+    }, 300);
+  };
+
+  const renderBanner = () => {
+    if (heroBannerImages.length === 0) return null;
+
+    // Create the slides array with the first banner duplicated at the end
+    const slides = heroBannerImages.length > 1
+      ? [...heroBannerImages, heroBannerImages[0]]
+      : heroBannerImages;
+
+    const activeDotIndex = currentBannerIndex === heroBannerImages.length
+      ? 0
+      : currentBannerIndex;
+
+    return (
+      <View style={s.heroPad}>
+        <HeroCarousel
+          slides={slides}
+          index={currentBannerIndex}
+          transitionEnabled={isTransitionEnabled}
+          onSwipeStart={handleSwipeStart}
+          onSwipeEnd={handleSwipeEnd}
+          onPress={() => {
+            const actualIndex = currentBannerIndex === heroBannerImages.length ? 0 : currentBannerIndex;
+            const bannerData = heroBannersData[actualIndex];
+            const allLinked = bannerData?.linkedRestaurants || [];
+            const linkedRestaurants = zoneId ? allLinked.filter(r => !r.zoneId || String(r.zoneId) === String(zoneId)) : allLinked;
+            if (linkedRestaurants.length > 0) {
+              const firstRestaurant = linkedRestaurants[0];
+              const restaurantId =
+                getRestaurantRouteId(firstRestaurant) ||
+                firstRestaurant.restaurantId ||
+                firstRestaurant._id;
+              if (restaurantId) {
+                navigate(toFoodUserPath(`/user/restaurants/${restaurantId}`));
+              }
+            }
+          }}
+          dots={heroBannerImages.length > 1 ? (
+            <View style={s.dots}>
+              {heroBannerImages.map((_, dotIndex) => (
+                <Pressable
+                  key={dotIndex}
+                  hitSlop={6}
+                  onPress={() => {
+                    setIsTransitionEnabled(true);
+                    setCurrentBannerIndex(dotIndex);
+                    resetAutoSlide();
+                  }}
+                  style={activeDotIndex === dotIndex ? s.dotActive : s.dot}
+                  accessibilityLabel={`Go to banner ${dotIndex + 1}`}
+                />
+              ))}
+            </View>
+          ) : null}
+        />
+      </View>
+    );
+  };
+  return renderBanner();
+}
+
 export default function Home({ homeMode = null, isTabActive = true }) {
   const bottomNavSpace = useBottomNavSpace();
   const s = useStyles();
@@ -684,7 +862,6 @@ export default function Home({ homeMode = null, isTabActive = true }) {
   const navigate = useNavigate();
   const routerLocation = useRouterLocation();
   const hasRestoredBrowseScrollRef = useRef(false);
-  const HERO_BANNER_AUTO_SLIDE_MS = 3500;
   const BACKEND_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, "");
   const [searchParams] = useSearchParams();
   const query = searchParams.get("q") || "";
@@ -767,8 +944,6 @@ export default function Home({ homeMode = null, isTabActive = true }) {
     setShowStickySearch((prev) => (prev === past ? prev : past));
   }, []);
 
-  const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
-  const [isTransitionEnabled, setIsTransitionEnabled] = useState(true);
   const [publicOffers, setPublicOffers] = useState([]);
 
   useEffect(() => {
@@ -1196,9 +1371,6 @@ export default function Home({ homeMode = null, isTabActive = true }) {
     );
   }, [displayCategories]);
 
-  // Swipe functionality for hero banner carousel
-  const isSwiping = useRef(false);
-  const autoSlideIntervalRef = useRef(null);
 
   // Sync prevVegMode when vegMode changes from context
   useEffect(() => {
@@ -1274,119 +1446,12 @@ export default function Home({ homeMode = null, isTabActive = true }) {
     }
   };
 
-  // Keep index within current banner bounds after admin updates/reloads.
-  useEffect(() => {
-    setCurrentBannerIndex((prev) => {
-      if (heroBannerImages.length === 0) return 0;
-      return Math.min(prev, heroBannerImages.length - 1);
-    });
-  }, [heroBannerImages.length]);
 
   // Preload hero images to avoid white blink during slide transition.
   useEffect(() => {
     preloadImageUrls(heroBannerImages);
   }, [heroBannerImages]);
 
-  const startHeroBannerAutoSlide = useCallback(() => {
-    if (autoSlideIntervalRef.current) {
-      clearInterval(autoSlideIntervalRef.current);
-    }
-
-    if (heroBannerImages.length <= 1) return;
-
-    autoSlideIntervalRef.current = setInterval(() => {
-      if (!isSwiping.current) {
-        setIsTransitionEnabled(true);
-        setCurrentBannerIndex((prev) => {
-          if (prev >= heroBannerImages.length) return prev;
-          return prev + 1;
-        });
-      }
-    }, HERO_BANNER_AUTO_SLIDE_MS);
-  }, [heroBannerImages.length, HERO_BANNER_AUTO_SLIDE_MS]);
-
-  // Handle snap-back when reaching the cloned slide at the end
-  useEffect(() => {
-    if (currentBannerIndex === heroBannerImages.length && heroBannerImages.length > 1) {
-      const timer = setTimeout(() => {
-        setIsTransitionEnabled(false);
-        setCurrentBannerIndex(0);
-      }, 500); // match transition duration
-      return () => clearTimeout(timer);
-    }
-    return undefined;
-  }, [currentBannerIndex, heroBannerImages.length]);
-
-  // Re-enable transition after snap-back
-  useEffect(() => {
-    if (!isTransitionEnabled && currentBannerIndex === 0) {
-      const timer = setTimeout(() => {
-        setIsTransitionEnabled(true);
-      }, 50);
-      return () => clearTimeout(timer);
-    }
-    return undefined;
-  }, [isTransitionEnabled, currentBannerIndex]);
-
-  // Auto-cycle hero banner images
-  useEffect(() => {
-    startHeroBannerAutoSlide();
-
-    return () => {
-      if (autoSlideIntervalRef.current) {
-        clearInterval(autoSlideIntervalRef.current);
-      }
-    };
-  }, [startHeroBannerAutoSlide]);
-
-  // Helper function to reset auto-slide timer
-  const resetAutoSlide = useCallback(() => {
-    startHeroBannerAutoSlide();
-  }, [startHeroBannerAutoSlide]);
-
-  // Swipe handlers for hero banner carousel (the web's touch handlers)
-  const handleSwipeStart = () => {
-    isSwiping.current = true;
-  };
-
-  const handleSwipeEnd = (deltaX, deltaYRaw) => {
-    if (!isSwiping.current || heroBannerImages.length === 0) return;
-
-    const deltaY = Math.abs(deltaYRaw);
-    const minSwipeDistance = 50; // Minimum distance for a swipe
-
-    // Check if it's a horizontal swipe (not vertical scroll)
-    if (Math.abs(deltaX) > minSwipeDistance && Math.abs(deltaX) > deltaY) {
-      if (deltaX > 0) {
-        // Swipe right - go to previous image
-        if (currentBannerIndex === 0) {
-          setIsTransitionEnabled(false);
-          setCurrentBannerIndex(heroBannerImages.length);
-          setTimeout(() => {
-            setIsTransitionEnabled(true);
-            setCurrentBannerIndex(heroBannerImages.length - 1);
-          }, 50);
-        } else {
-          setIsTransitionEnabled(true);
-          setCurrentBannerIndex((prev) => prev - 1);
-        }
-      } else {
-        // Swipe left - go to next image
-        setIsTransitionEnabled(true);
-        setCurrentBannerIndex((prev) => {
-          if (prev >= heroBannerImages.length) return prev;
-          return prev + 1;
-        });
-      }
-      // Reset auto-slide timer after manual swipe
-      resetAutoSlide();
-    }
-
-    // Reset swipe state after a short delay
-    setTimeout(() => {
-      isSwiping.current = false;
-    }, 300);
-  };
 
   const [activeFilters, setActiveFilters] = useState(new Set());
   const [sortBy, setSortBy] = useState(null); // null, 'price-low', 'price-high', 'rating-high', 'rating-low'
@@ -1443,7 +1508,6 @@ export default function Home({ homeMode = null, isTabActive = true }) {
           .filter(Boolean);
         setHeroBannerImages(images);
         setHeroBannersData(list);
-        setCurrentBannerIndex(0);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -1674,7 +1738,6 @@ export default function Home({ homeMode = null, isTabActive = true }) {
     };
   }, [zoneId, zoneLoading, normalizeImageUrl]);
 
-  const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [activeTab, setActiveTab] = useState("food");
 
   // Simple filter toggle function
@@ -2628,14 +2691,7 @@ export default function Home({ homeMode = null, isTabActive = true }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate, orderType, isTakeawayPage]);
 
-  // Animated placeholder cycling - same as RestaurantDetails highlight offer animation
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setPlaceholderIndex((prev) => (prev + 1) % placeholders.length);
-    }, 2000); // Change placeholder every 2 seconds (same as RestaurantDetails)
-
-    return () => clearInterval(interval);
-  }, []); // placeholders is a constant, no need for dependency
+  // the search placeholder cycles inside HomeHeader (RotatingPlaceholder), not here: it re-rendered the whole page
 
   const closeTakeawaySearch = () => {
     LayoutAnimation.configureNext(LayoutAnimation.create(240, "easeInEaseOut", "opacity"));
@@ -2655,58 +2711,15 @@ export default function Home({ homeMode = null, isTabActive = true }) {
 
     if (heroBannerImages.length === 0) return null;
 
-    // Create the slides array with the first banner duplicated at the end
-    const slides = heroBannerImages.length > 1
-      ? [...heroBannerImages, heroBannerImages[0]]
-      : heroBannerImages;
-
-    const activeDotIndex = currentBannerIndex === heroBannerImages.length
-      ? 0
-      : currentBannerIndex;
-
     return (
-      <View style={s.heroPad}>
-        <HeroCarousel
-          slides={slides}
-          index={currentBannerIndex}
-          transitionEnabled={isTransitionEnabled}
-          onSwipeStart={handleSwipeStart}
-          onSwipeEnd={handleSwipeEnd}
-          onPress={() => {
-            const actualIndex = currentBannerIndex === heroBannerImages.length ? 0 : currentBannerIndex;
-            const bannerData = heroBannersData[actualIndex];
-            const allLinked = bannerData?.linkedRestaurants || [];
-            const linkedRestaurants = zoneId ? allLinked.filter(r => !r.zoneId || String(r.zoneId) === String(zoneId)) : allLinked;
-            if (linkedRestaurants.length > 0) {
-              const firstRestaurant = linkedRestaurants[0];
-              const restaurantId =
-                getRestaurantRouteId(firstRestaurant) ||
-                firstRestaurant.restaurantId ||
-                firstRestaurant._id;
-              if (restaurantId) {
-                navigate(toFoodUserPath(`/user/restaurants/${restaurantId}`));
-              }
-            }
-          }}
-          dots={heroBannerImages.length > 1 ? (
-            <View style={s.dots}>
-              {heroBannerImages.map((_, dotIndex) => (
-                <Pressable
-                  key={dotIndex}
-                  hitSlop={6}
-                  onPress={() => {
-                    setIsTransitionEnabled(true);
-                    setCurrentBannerIndex(dotIndex);
-                    resetAutoSlide();
-                  }}
-                  style={activeDotIndex === dotIndex ? s.dotActive : s.dot}
-                  accessibilityLabel={`Go to banner ${dotIndex + 1}`}
-                />
-              ))}
-            </View>
-          ) : null}
-        />
-      </View>
+      <HeroBannerAuto
+        heroBannerImages={heroBannerImages}
+        heroBannersData={heroBannersData}
+        zoneId={zoneId}
+        navigate={navigate}
+        s={s}
+        active={isTabActive}
+      />
     );
   })();
 
@@ -2753,7 +2766,6 @@ export default function Home({ homeMode = null, isTabActive = true }) {
                 setActiveTab={setActiveTab}
                 location={effectiveLocation}
                 handleSearchFocus={handleSearchFocus}
-                placeholderIndex={placeholderIndex}
                 placeholders={placeholders}
                 vegMode={vegMode}
                 handleVegModeChange={handleVegModeChange}
