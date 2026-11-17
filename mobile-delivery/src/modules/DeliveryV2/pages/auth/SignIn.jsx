@@ -14,9 +14,11 @@ import { deliveryAPI } from "@food/api"
 import { setAuthData as storeAuthData, clearModuleAuth, setPendingTicket, clearPendingTicket } from "@food/utils/auth"
 import { collectFcmTokenFast, persistModuleFcmToken, finalizeDeliveryPendingSubmission, prefetchModuleFcmToken } from "@food/utils/firebaseMessaging"
 import { getUserFacingApiError, showUserFacingApiError } from "@/shared/utils/apiError"
-import { DEFAULT_BRAND_LOGO } from "@/shared/constants/brandLogo"
 import { prefetchPolicyContentWhenIdle } from "@/shared/utils/policyPages"
 import { requestPhoneFocus, usePhoneFocusRequest } from "@/shared/utils/loginFocus"
+
+// web: /logo.webp banner (900 x 364)
+const LOGIN_LOGO = require("../../../../assets/public/images/logo.webp")
 
 const DEFAULT_COUNTRY_CODE = "+91"
 const BLUE = "#0E4B9C"
@@ -804,7 +806,10 @@ export default function DeliverySignIn() {
         <View style={styles.column}>
           {/* Logo & Header */}
           <View style={styles.header}>
-            <AppImage src={DEFAULT_BRAND_LOGO} style={styles.logo} contentFit="contain" accessibilityLabel="Foodie" />
+            {/* web: h-14 w-auto mb-3 rounded-xl object-contain shadow-md */}
+            <View style={styles.logoBox}>
+              <AppImage src={LOGIN_LOGO} style={styles.logo} contentFit="contain" accessibilityLabel="Foodie Logo" />
+            </View>
             <GradientTitle text="Delivery Partner" />
             <View style={styles.subtitleWrap}>
               {showLoginStep ? (
@@ -1090,7 +1095,8 @@ const styles = StyleSheet.create({
   main: { flexGrow: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 17.6, paddingTop: 48, paddingBottom: 96 },
   column: { width: "100%", maxWidth: 384, top: -40 },
   header: { marginBottom: 20, alignItems: "center" },
-  logo: { height: 112, width: 220, marginBottom: -14 },
+  logoBox: { marginBottom: 12, borderRadius: 12, backgroundColor: colors.white, ...shadow.md },
+  logo: { height: 56, width: Math.round((56 * 900) / 364), borderRadius: 12, overflow: "hidden" },
   title: { fontFamily: fonts.sora, fontWeight: "800", fontSize: 25, lineHeight: 34, letterSpacing: -0.4, color: BLUE, textAlign: "center" },
   subtitleWrap: { maxWidth: 310, paddingHorizontal: 16, marginTop: 12, alignItems: "center" },
   subtitle: { fontFamily: fonts.outfit, fontWeight: "500", fontSize: 13.5, lineHeight: 22, letterSpacing: 0.3, color: colors.slate[600], textAlign: "center" },

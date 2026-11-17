@@ -10,6 +10,8 @@ import OnboardingExitModal from "@/shared/components/OnboardingExitModal"
 import { hasDeliveryStep1Progress, getAllSignupDocumentsFromDB } from "../../utils/deliveryOnboardingStorage"
 import { EMAIL_REGEX } from "@/shared/utils/emailValidation"
 import { prefetchModuleFcmToken } from "@food/utils/firebaseMessaging"
+import { getStoredDeliveryReferral, normalizeDeliveryReferralInput } from "../../utils/deliveryReferral"
+import useDeliveryReferEarnVisible from "../../hooks/useDeliveryReferEarnVisible"
 const debugError = () => {}
 
 const VEHICLE_OPTIONS = [
@@ -34,6 +36,7 @@ function Field({ label, required, error, children }) {
 
 export default function SignupStep1() {
   const navigate = useNavigate()
+  const referEarnVisible = useDeliveryReferEarnVisible()
   const [formData, setFormData] = useState(() => {
     const saved = sessionStorage.getItem("deliverySignupDetails")
     const base = {
@@ -52,9 +55,12 @@ export default function SignupStep1() {
       panNumber: "",
       aadharNumber: ""
     }
+    // Pre-fill the referral code captured from a share link
+    base.ref = getStoredDeliveryReferral()
     if (saved) {
       try {
-        return { ...base, ...JSON.parse(saved) }
+        const parsed = JSON.parse(saved)
+        return { ...base, ...parsed, ref: parsed?.ref || base.ref }
       } catch (e) {
         debugError("Error parsing saved details:", e)
       }
@@ -231,7 +237,7 @@ export default function SignupStep1() {
         name: formData.name.trim(),
         phone: String(formData.phone || "").replace(/\D/g, "").slice(0, 15),
         countryCode: formData.countryCode || "+91",
-        ref: String(formData.ref || "").trim() || "",
+        ref: referEarnVisible === false ? "" : String(formData.ref || "").trim() || "",
         email: formData.email?.trim() || "",
         address: formData.address.trim(),
         city: formData.city.trim(),
@@ -364,6 +370,27 @@ export default function SignupStep1() {
           <Field label="Aadhar Number" required error={errors.aadharNumber}>
             <TextInput {...inputProps("aadharNumber")} maxLength={12} keyboardType="number-pad" placeholder="123456789012" />
           </Field>
+
+          {/* Referral Code (optional) - hidden when admin turns off Delivery Refer & Earn */}
+          {referEarnVisible ? (
+            <View>
+              <Text style={styles.label}>
+                {"Referral Code "}
+                <Text style={{ color: colors.gray[400], fontWeight: "400" }}>(optional)</Text>
+              </Text>
+              <TextInput
+                {...inputProps("ref")}
+                onChangeText={(value) => setFormData((prev) => ({ ...prev, ref: normalizeDeliveryReferralInput(value) }))}
+                maxLength={24}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                placeholder="e.g. DP-6E84A43B"
+              />
+              <Text style={{ fontSize: 12, lineHeight: 16, color: colors.gray[500], marginTop: 4 }}>
+                Got invited by a delivery partner? Enter their code.
+              </Text>
+            </View>
+          ) : null}
 
           {/* Submit Button */}
           <Pressable

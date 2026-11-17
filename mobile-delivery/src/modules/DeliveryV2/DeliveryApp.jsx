@@ -11,7 +11,8 @@
 // Native addition: the notification channels (default + the ringing delivery_orders) exist before the first push.
 // (The delivery socket reconnects on return to the front inside useDeliveryNotifications.)
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Linking, StyleSheet, View } from 'react-native';
+import { captureDeliveryReferralFromUrl } from './utils/deliveryReferral';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocationNow, useNavigate } from '@/lib/router';
 import { ensureAndroidChannel } from '@/lib/push';
@@ -51,6 +52,13 @@ export default function DeliveryApp({ children }) {
   useEffect(() => {
     // the "default" channel (every backend push uses it) must be high importance before the first push arrives
     ensureAndroidChannel().catch(() => {});
+  }, []);
+
+  // DeliveryV2Router: read ?ref= (or /join/CODE) of the link that opened the app, before signup needs it
+  useEffect(() => {
+    Linking.getInitialURL().then(captureDeliveryReferralFromUrl).catch(() => {});
+    const sub = Linking.addEventListener('url', ({ url }) => captureDeliveryReferralFromUrl(url));
+    return () => sub.remove();
   }, []);
 
   // DeliveryV2Router: a failed token refresh / a removed delivery token -> login

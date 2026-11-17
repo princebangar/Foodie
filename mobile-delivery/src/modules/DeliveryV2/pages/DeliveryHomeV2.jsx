@@ -170,7 +170,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
   const layerShown = useTabShown();
   const insets = useSafeAreaInsets();
   const navBottom92 = useBottomNavSpace(-4); // web: bottom-[92px]
-  const navBottom100 = useBottomNavSpace(4); // web: bottom-[100px]
+  const navBottom100 = useBottomNavSpace(12); // web: bottom calc(108px + safe area) — 12px above the bottom nav
   const navBottom112 = useBottomNavSpace(16); // web: bottom-28
   const { isOnline, toggleOnline, acceptedOrders, focusedOrderId, orderSessions, setRiderLocation, setAcceptedOrders, setCapacity, setFocusedOrder, updateOrderSession, removeAcceptedOrder } = useDeliveryStore();
   const activeOrder = useDeliveryStore((state) => state.getFocusedOrder());

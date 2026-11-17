@@ -1963,6 +1963,14 @@ export const deliveryAPI = {
     apiClient.get("/food/delivery/referrals/stats", {
       contextModule: "delivery",
     }),
+  /** GET /food/delivery/referrals/details - code, share link, reward ladder, stats and invited partners */
+  getReferralDetails: () =>
+    apiClient.get("/food/delivery/referrals/details", {
+      contextModule: "delivery",
+    }),
+  /** GET /food/delivery/referrals/invite/:code - public, for the /join/:code invite page */
+  getReferralInvite: (code) =>
+    apiClient.get(`/food/delivery/referrals/invite/${encodeURIComponent(code)}`),
   logout: (refreshToken) => {
     deliveryMeCached = null;
     deliveryMeCacheTime = 0;

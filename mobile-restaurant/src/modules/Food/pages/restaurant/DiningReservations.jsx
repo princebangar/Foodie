@@ -1,7 +1,7 @@
 // Web: pages/restaurant/DiningReservations.jsx (/reservations) — "Table Reservations": header (back, guest search,
 // Queue / Media switch), the three stat cards, the phone Reservations / Photos & Menu switch, the dining controls
-// (on / off switch, dining categories, cuisines, price for two, facilities, guest limit, "Save settings" -> admin
-// approval request, pending notice + 15 s poll while a request is pending, approved / rejected toast), the restaurant /
+// (restaurant details: cuisines up to 3, price for two, facilities, "Save details" -> PATCH profile; on / off switch,
+// dining categories, guest limit, "Save settings" -> admin approval request, pending notice + 15 s poll while a request is pending, approved / rejected toast), the restaurant /
 // menu photo manager (upload several, choose the main one, remove), and the reservation queue (Priority / New /
 // Today, Accept / Decline / Check-in / Check-out). Same API calls (GET current restaurant, GET bookings by restaurant,
 // GET dining categories, GET pending dining request, POST dining update request, PATCH booking status, POST cover /
@@ -198,6 +198,7 @@ export default function DiningReservations() {
   const [costForTwo, setCostForTwo] = useState('');
   const [costFocused, setCostFocused] = useState(false);
   const [diningFacilities, setDiningFacilities] = useState([]);
+  const [savingProfileDetails, setSavingProfileDetails] = useState(false);
   const [availableCategories, setAvailableCategories] = useState([]);
   const [pendingRequest, setPendingRequest] = useState(null);
   const [, setFetchingRequest] = useState(true);
@@ -225,7 +226,13 @@ export default function DiningReservations() {
     setDiningType(Array.isArray(rawDiningType) ? rawDiningType : rawDiningType ? [rawDiningType].filter(Boolean) : []);
     setDiningCuisines(Array.isArray(restaurantData?.cuisines) ? restaurantData.cuisines : []);
     setCostForTwo(restaurantData?.costForTwo ? String(restaurantData.costForTwo) : '');
-    setDiningFacilities(Array.isArray(restaurantData?.diningSettings?.facilities) ? restaurantData.diningSettings.facilities : []);
+    setDiningFacilities(
+      Array.isArray(restaurantData?.facilities)
+        ? restaurantData.facilities
+        : Array.isArray(restaurantData?.diningSettings?.facilities)
+          ? restaurantData.diningSettings.facilities
+          : [],
+    );
   };
 
   useEffect(() => {
@@ -432,6 +439,29 @@ export default function DiningReservations() {
     }
   };
 
+  // web: handleSaveProfileDetails — cuisines / price for two / facilities go straight to the restaurant profile
+  // (the dining request only carries on/off, guest limit and categories)
+  const handleSaveProfileDetails = async () => {
+    if (savingProfileDetails) return;
+    if (diningCuisines.length === 0) {
+      toast.error('Select at least one cuisine');
+      return;
+    }
+    setSavingProfileDetails(true);
+    try {
+      const response = await restaurantAPI.updateProfile({
+        cuisines: diningCuisines,
+        costForTwo: costForTwo === '' ? null : Number(costForTwo),
+        facilities: diningFacilities,
+      });
+      if (response?.data?.success) toast.success('Restaurant details saved');
+    } catch (error) {
+      toast.error(error?.response?.data?.message || 'Failed to save restaurant details');
+    } finally {
+      if (aliveRef.current) setSavingProfileDetails(false);
+    }
+  };
+
   const handleSaveDiningSettings = async () => {
     if (!restaurant || savingDiningSettings || pendingRequest) return;
 
@@ -446,19 +476,6 @@ export default function DiningReservations() {
     }
 
     const nextMaxGuests = parseInt(maxGuestsLimit, 10) || 0;
-    const nextCostForTwo = parseInt(costForTwo, 10) || 0;
-
-    if (diningEnabled && diningCuisines.length === 0) {
-      setDiningSettingsError('Please choose the cuisines you serve');
-      toast.error('Cuisines are required');
-      return;
-    }
-
-    if (diningEnabled && nextCostForTwo <= 0) {
-      setDiningSettingsError('Please add the average price for two people');
-      toast.error('Price for two is required');
-      return;
-    }
 
     if (diningEnabled && nextMaxGuests <= 0) {
       setDiningSettingsError('Guest limit must be at least 1 when dining is enabled');
@@ -470,9 +487,6 @@ export default function DiningReservations() {
       isEnabled: Boolean(diningEnabled),
       maxGuests: nextMaxGuests,
       diningType: chosenTypes,
-      cuisines: diningCuisines,
-      costForTwo: nextCostForTwo || null,
-      facilities: diningFacilities,
     };
 
     setDiningSettingsError('');
@@ -894,7 +908,9 @@ export default function DiningReservations() {
             {/* Dining details shown to customers (asked before approval) */}
             <View style={[styles.block, { gap: sp(6) }]}>
               <View>
-                <Text style={styles.fieldLabel}>Cuisines you serve *</Text>
+                <Text style={styles.controlsEyebrow}>RESTAURANT DETAILS</Text>
+                <Text style={[styles.controlsTitle, { marginBottom: sp(4) }]}>What guests see on your dining page</Text>
+                <Text style={styles.fieldLabel}>Cuisines (up to 3)</Text>
                 <Text style={styles.fieldHint}>Shown on your dining page and used in the customer cuisine filter</Text>
                 <View style={styles.chipWrap}>
                   {DINING_CUISINES.map((cuisine) => {
@@ -902,9 +918,14 @@ export default function DiningReservations() {
                     return (
                       <Pressable
                         key={cuisine}
-                        disabled={locked}
-                        onPress={() => setDiningCuisines(on ? diningCuisines.filter((c) => c !== cuisine) : [...diningCuisines, cuisine])}
-                        style={[styles.chip, on ? styles.chipPrimaryOn : styles.chipOff, locked && { opacity: 0.8 }]}
+                        onPress={() =>
+                          setDiningCuisines((prev) => {
+                            if (prev.includes(cuisine)) return prev.filter((c) => c !== cuisine);
+                            if (prev.length >= 3) return prev;
+                            return [...prev, cuisine];
+                          })
+                        }
+                        style={[styles.chip, on ? styles.chipPrimaryOn : styles.chipOff]}
                       >
                         <Text style={[styles.chipText, { color: on ? PRIMARY : colors.slate[600] }]}>{cuisine}</Text>
                       </Pressable>
@@ -913,17 +934,16 @@ export default function DiningReservations() {
                 </View>
               </View>
               <View>
-                <Text style={styles.fieldLabel}>Average price for two (₹) *</Text>
+                <Text style={styles.fieldLabel}>Price for two (Rs)</Text>
                 <TextInput
                   keyboardType="number-pad"
                   value={costForTwo}
-                  editable={!locked}
                   onChangeText={(text) => setCostForTwo(String(text).replace(/[^\d]/g, '').slice(0, 6))}
                   onFocus={() => setCostFocused(true)}
                   onBlur={() => setCostFocused(false)}
                   placeholder="e.g. 800"
                   placeholderTextColor={colors.slate[400]}
-                  style={[styles.costInput, costFocused && styles.inputFocus, locked && { opacity: 0.6 }]}
+                  style={[styles.costInput, costFocused && styles.inputFocus]}
                 />
               </View>
               <View>
@@ -935,9 +955,8 @@ export default function DiningReservations() {
                     return (
                       <Pressable
                         key={facility}
-                        disabled={locked}
                         onPress={() => setDiningFacilities(on ? diningFacilities.filter((f) => f !== facility) : [...diningFacilities, facility])}
-                        style={[styles.chip, on ? styles.chipGreenOn : styles.chipOff, locked && { opacity: 0.8 }]}
+                        style={[styles.chip, on ? styles.chipGreenOn : styles.chipOff]}
                       >
                         <Text style={[styles.chipText, { color: on ? restaurantTheme.primaryStrong : colors.slate[600] }]}>{facility}</Text>
                       </Pressable>
@@ -945,6 +964,18 @@ export default function DiningReservations() {
                   })}
                 </View>
               </View>
+              <Pressable
+                onPress={handleSaveProfileDetails}
+                disabled={savingProfileDetails}
+                style={({ pressed }) => [
+                  styles.saveBtn,
+                  { backgroundColor: colors.slate[900] },
+                  savingProfileDetails && { opacity: 0.6 },
+                  pressed && !savingProfileDetails && { transform: [{ scale: 0.95 }] },
+                ]}
+              >
+                <Text style={styles.saveText}>{savingProfileDetails ? 'Saving...' : 'Save details'}</Text>
+              </Pressable>
             </View>
 
             <View style={[styles.block, { gap: sp(6) }]}>

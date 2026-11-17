@@ -15,6 +15,7 @@ import {
 } from "@/shared/utils/apiError"
 import { prepareUploadFile } from "@/shared/utils/imageCompressor"
 import { setPendingTicket } from "@food/utils/auth"
+import { clearStoredDeliveryReferral } from "../../utils/deliveryReferral"
 import useDeliveryOnboardingExitGuard from "../../hooks/useDeliveryOnboardingExitGuard"
 import {
   DELIVERY_SIGNUP_DOC_TYPES,
@@ -294,6 +295,7 @@ export default function SignupStep2() {
 
       if (response?.data?.success) {
         sessionStorage.removeItem("deliverySignupDetails")
+        clearStoredDeliveryReferral()
         sessionStorage.removeItem("deliverySignupDocs")
         await clearSignupDocumentsFromDB()
         if (shouldRegister) {

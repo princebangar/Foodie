@@ -3,7 +3,7 @@
 // muted orders saved in localStorage) and emitLocation. Same exports, same return value, same rules.
 // Native changes (platform only):
 //   - new Audio(...) -> one expo-audio player with the bundled assets/sounds/restaurant_alert.mp3 (the web's
-//     /assets/media/restaurant_alert.mp3; both "original" and "hello_parth_tone" were that same file). The audio mode
+//     /assets/media/restaurant_alert.mp3; both "original" and "foodie_delivery_tone" were that same file). The audio mode
 //     lets it play with the app in the background / screen off (the "You are online" location service keeps the
 //     process alive), so an offer that arrives over the socket while the phone is locked rings like on screen.
 //   - navigator.vibrate(pattern) -> Vibration.vibrate([0, ...pattern]) (Android patterns start with a pause).
@@ -368,7 +368,7 @@ export const useDeliveryNotifications = () => {
       } catch (_) {}
 
       ensureAudioMode();
-      const selectedSound = localStorage.getItem('delivery_alert_sound') || 'hello_parth_tone';
+      const selectedSound = localStorage.getItem('delivery_alert_sound') || 'foodie_delivery_tone';
       const soundFile = selectedSound === 'original'
         ? resolveAudioSource(originalSound)
         : resolveAudioSource(alertSound);
@@ -630,7 +630,7 @@ export const useDeliveryNotifications = () => {
   // (web: also an "unlock" on the first tap for the browser autoplay policy - not needed for a native player)
   useEffect(() => {
     ensureAudioMode();
-    const selectedSound = localStorage.getItem('delivery_alert_sound') || 'hello_parth_tone';
+    const selectedSound = localStorage.getItem('delivery_alert_sound') || 'foodie_delivery_tone';
     const soundFile = selectedSound === 'original'
       ? resolveAudioSource(originalSound)
       : resolveAudioSource(alertSound);

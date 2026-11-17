@@ -25,11 +25,11 @@ import {
 } from "@food/utils/auth"
 import { clearOnboardingFromLocalStorage, clearAllFilesFromDB, checkOnboardingStatus, isRestaurantOnboardingComplete } from "@/modules/Food/utils/onboardingUtils"
 import { collectFcmTokenFast, persistModuleFcmToken } from "@food/utils/firebaseMessaging"
-import { DEFAULT_BRAND_LOGO } from "@/shared/constants/brandLogo"
 import { prefetchPolicyContentWhenIdle } from "@/shared/utils/policyPages"
 import { hardNavigate } from "@/shared/utils/nativeShell"
 import { requestPhoneFocus, usePhoneFocusRequest } from "@/shared/utils/loginFocus"
 
+const LOGIN_LOGO = require("../../../../../assets/public/images/logo.webp")
 const DEFAULT_COUNTRY_CODE = "+91"
 const RED = restaurantTheme.brand // #B80B3D
 const RED_DARK = restaurantTheme.brandDark // #66001D
@@ -751,7 +751,10 @@ export default function RestaurantLogin() {
         <View style={styles.column}>
           {/* Logo & Header */}
           <View style={styles.header}>
-            <AppImage src={DEFAULT_BRAND_LOGO} style={styles.logo} contentFit="contain" accessibilityLabel="Foodie" />
+            {/* web: /logo.webp banner, h-14 w-auto mb-3 rounded-xl shadow-md */}
+            <View style={styles.logoBox}>
+              <AppImage src={LOGIN_LOGO} style={styles.logo} contentFit="contain" accessibilityLabel="Foodie Logo" />
+            </View>
             <Text style={styles.title}>Restaurant Partner</Text>
             <View style={styles.subtitleWrap}>
               {showLoginStep ? (
@@ -959,7 +962,8 @@ const styles = StyleSheet.create({
   main: { flexGrow: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24, paddingTop: 48, paddingBottom: 96 },
   column: { width: "100%", maxWidth: 384, top: -40 },
   header: { marginBottom: 20, alignItems: "center" },
-  logo: { height: 112, width: 220, marginBottom: -14 },
+  logoBox: { marginBottom: 12, borderRadius: 12, backgroundColor: colors.white, ...shadow.md },
+  logo: { height: 56, width: Math.round((56 * 900) / 364), borderRadius: 12, overflow: "hidden" },
   // web: text-[25px] font-extrabold text-[#B80B3D] tracking-tight font-['Outfit']
   title: { fontFamily: fonts.outfit, fontWeight: "800", fontSize: 25, lineHeight: 34, letterSpacing: -0.6, color: RED, textAlign: "center" },
   subtitleWrap: { maxWidth: 310, paddingHorizontal: 16, marginTop: 12, alignItems: "center" },

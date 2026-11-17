@@ -6,7 +6,7 @@
 - Splash: maroon `#66001D`, wordmark, soft roshni me dhakkan wali thaali — jaate waqt dhakkan uthke fade hota hai aur bhaap wali dish dikhti hai, tagline COOK · SERVE · GROW (dish ke neeche).
 - Signed release: `releases/Foodie-Restaurant-1.0.0.apk` (v2 signature OK, 29/29 arm64 libraries). Keystore
   `C:/Users/Prince/.foodie/foodie-restaurant-upload.jks` (password README ke saath), SHA-1
-  `5F:45:4C:9D:EA:25:D3:C1:0E:A3:9F:F8:12:AE:FA:F5:F6:7C:02:03`.
+  `0B:D3:73:0A:F8:11:3B:33:38:93:F7:A6:FC:EF:2E:50:73:FE:28:C3 (16 Nov: nayi keystore, purani is computer pe nahi thi)`.
 
 ## Checks
 - Routes: 56, missing 0 · web ke 59 components, app me na hon: 0
@@ -39,6 +39,16 @@
 
 **Backend deploy chahiye** (warna 3 aur 4 server pe kaam nahi karenge): `Backend/src/core/notifications/firebase.service.js`,
 `Backend/src/modules/food/restaurant/models/restaurant.model.js`, `.../services/restaurant.service.js`.
+
+## 16 Nov — web vs native compare + fixes
+- Toast ka icon "Hello Parth" likha tha → ab web jaisa Foodie `logo-icon.webp`.
+- Login logo: web ab `/logo.webp` banner (h-14, rounded, shadow) dikhata hai → native bhi wahi.
+- Menu Categories: native kehta tha "admin approval nahi chahiye", jabki backend category ko pending rakhta hai → web
+  wale texts / toasts wapas ("sent for admin approval", "Foods can be added only after approval").
+- Dining: cuisines / price for two / facilities dining request ke saath jaate the, backend unhe save nahi karta tha →
+  ab web jaisa alag "Restaurant details" + "Save details" (PATCH profile), cuisines max 3.
+- `/feedback-complaints` route (web me hai) add kiya → Feedback tab.
+- Desktop pages (`pages/restaurant/desktop/*`) sirf bade screen ke liye hain, app me nahi.
 
 ## Abhi bhi web jaisa
 - **Hyperpure**: "This page is under development".

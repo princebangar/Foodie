@@ -1,0 +1,1019 @@
+// src/modules/Food/context/CartContext.jsx
+import {
+  createContext,
+  useContext,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
+import { toast } from "@/lib/toast"
+import { foodCartAPI } from "@food/api"
+import { useProfile } from "@food/context/ProfileContext"
+import { buildCartLineId } from "@food/utils/foodVariants"
+
+const debugWarn = (...args) => {}
+const debugError = (...args) => {}
+
+const GUEST_CART_KEY = "cart"
+// The server keeps a single cart per user, so remember which tab (delivery/takeaway)
+// it was started from. Pricing differs per mode, so the cart is only shown in that tab.
+const CART_MODE_KEY = "food_cart_mode"
+
+const toCartMode = (orderType) => (orderType === "takeaway" ? "takeaway" : "delivery")
+const cartModeLabel = (mode) => (mode === "takeaway" ? "Takeaway" : "Delivery")
+
+const readCartMode = () => {
+  try {
+    const saved = localStorage.getItem(CART_MODE_KEY)
+    return saved === "takeaway" || saved === "delivery" ? saved : null
+  } catch {
+    return null
+  }
+}
+
+const writeCartMode = (mode) => {
+  try {
+    if (mode) localStorage.setItem(CART_MODE_KEY, mode)
+    else localStorage.removeItem(CART_MODE_KEY)
+  } catch {
+    // ignore
+  }
+}
+
+const defaultCartContext = {
+  _isProvider: false,
+  cart: [],
+  items: [],
+  itemCount: 0,
+  total: 0,
+  cartReady: false,
+  couponCode: "",
+  restaurantId: null,
+  restaurantName: "",
+  lastAddEvent: null,
+  lastRemoveEvent: null,
+  addToCart: () => {
+    debugWarn("CartProvider not available - addToCart called")
+    return { ok: false, error: "Cart unavailable" }
+  },
+  removeFromCart: () => {
+    debugWarn("CartProvider not available - removeFromCart called")
+  },
+  updateQuantity: () => {
+    debugWarn("CartProvider not available - updateQuantity called")
+  },
+  getCartCount: () => 0,
+  isInCart: () => false,
+  getCartItem: () => null,
+  clearCart: () => {
+    debugWarn("CartProvider not available - clearCart called")
+  },
+  cleanCartForRestaurant: () => {
+    debugWarn("CartProvider not available - cleanCartForRestaurant called")
+  },
+  replaceCart: () => {
+    debugWarn("CartProvider not available - replaceCart called")
+    return { ok: false }
+  },
+  setCartCoupon: () => Promise.resolve({ ok: false }),
+  refreshCart: () => Promise.resolve([]),
+}
+
+const CartContext = createContext(defaultCartContext)
+
+const getUserToken = () => {
+  if (typeof window === "undefined") return null
+  try {
+    const authCustomer = localStorage.getItem("auth_customer")
+    if (authCustomer) {
+      if (authCustomer.startsWith("{")) {
+        try {
+          return JSON.parse(authCustomer)?.token || null
+        } catch {
+          return authCustomer
+        }
+      }
+      return authCustomer
+    }
+    return (
+      localStorage.getItem("user_accessToken") ||
+      localStorage.getItem("accessToken") ||
+      null
+    )
+  } catch {
+    return null
+  }
+}
+
+const isUserAuthenticated = () => Boolean(getUserToken())
+
+const getItemOrderType = (item) => (item?.orderType === "quick" ? "quick" : "food")
+const getItemSourceId = (item, orderType) =>
+  String(
+    item?.sourceId ||
+      (orderType === "quick"
+        ? item?.quickStoreId || item?.storeId || item?.sellerId || item?.restaurantId || ""
+        : item?.restaurantId || item?.sourceRestaurantId || ""),
+  )
+
+const normalizeCartData = (rawCart) => {
+  if (!Array.isArray(rawCart)) return []
+
+  return rawCart
+    .filter((item) => item && typeof item === "object")
+    .map((item, index) => {
+      const parsedQuantity = Number(item.quantity)
+      const parsedPrice = Number(item.price)
+      const normalizedRestaurantName =
+        typeof item.restaurant === "string"
+          ? item.restaurant
+          : typeof item.restaurant?.name === "string"
+            ? item.restaurant.name
+            : typeof item.sourceName === "string"
+              ? item.sourceName
+              : ""
+
+      const normalizedRestaurantId =
+        item.restaurantId ||
+        item.restaurant_id ||
+        item.restaurant?._id ||
+        item.restaurant?.restaurantId ||
+        item.sourceId ||
+        null
+
+      const normalizedImage =
+        item.image ||
+        item.imageUrl ||
+        item.product?.imageUrl ||
+        item.product?.image ||
+        ""
+
+      const baseItemId =
+        item.itemId ||
+        item.productId ||
+        item.foodId ||
+        item.baseItemId ||
+        item.menuItemId ||
+        item.id ||
+        item._id ||
+        `cart-item-${index}`
+
+      const variantId = item.variantId || item.variant?._id || item.variant?.id || ""
+      const variantName =
+        typeof item.variantName === "string"
+          ? item.variantName
+          : typeof item.variant?.name === "string"
+            ? item.variant.name
+            : ""
+      const parsedVariantPrice = Number(
+        item.variantPrice ?? item.variant?.price ?? item.price,
+      )
+      const orderType = item.orderType === "quick" ? "quick" : "food"
+      const sourceId = getItemSourceId({ ...item, restaurantId: normalizedRestaurantId }, orderType)
+      const lineItemId =
+        item.lineItemId ||
+        item.cartLineId ||
+        item.id ||
+        buildCartLineId(baseItemId, variantId)
+
+      return {
+        ...item,
+        id: String(lineItemId),
+        lineItemId: String(lineItemId),
+        itemId: String(baseItemId),
+        productId: String(baseItemId),
+        variantId: variantId ? String(variantId) : "",
+        variantName,
+        variantPrice: Number.isFinite(parsedVariantPrice) ? parsedVariantPrice : 0,
+        name: item.name || item.product?.name || "Item",
+        orderType,
+        type: orderType,
+        sourceId,
+        sourceName:
+          item.sourceName ||
+          (orderType === "quick"
+            ? item.quickStoreName || item.storeName || item.sellerName || "Quick Commerce"
+            : normalizedRestaurantName),
+        quantity:
+          Number.isFinite(parsedQuantity) && parsedQuantity > 0
+            ? Math.floor(parsedQuantity)
+            : 1,
+        price: Number.isFinite(parsedPrice) ? parsedPrice : 0,
+        otherPrice: Number(item.otherPrice) || 0,
+        restaurant: normalizedRestaurantName,
+        restaurantId: normalizedRestaurantId,
+        image: normalizedImage,
+        imageUrl: normalizedImage,
+      }
+    })
+}
+
+const extractCartPayload = (response) => {
+  const data = response?.data?.data?.cart ?? response?.data?.cart ?? response?.data?.data ?? null
+  if (!data || typeof data !== "object") {
+    return { items: [], couponCode: "", restaurantId: null, restaurantName: "" }
+  }
+  if (Array.isArray(data)) {
+    return { items: data, couponCode: "", restaurantId: null, restaurantName: "" }
+  }
+  return {
+    items: Array.isArray(data.items) ? data.items : [],
+    couponCode: data.couponCode || "",
+    restaurantId: data.restaurantId || null,
+    restaurantName: data.restaurantName || "",
+  }
+}
+
+const readGuestCart = () => {
+  if (typeof window === "undefined") return []
+  try {
+    const saved = localStorage.getItem(GUEST_CART_KEY)
+    return normalizeCartData(saved ? JSON.parse(saved) : [])
+  } catch {
+    return []
+  }
+}
+
+const writeGuestCart = (items) => {
+  try {
+    const normalized = normalizeCartData(items)
+    if (normalized.length > 0) {
+      localStorage.setItem(GUEST_CART_KEY, JSON.stringify(normalized))
+    } else {
+      localStorage.removeItem(GUEST_CART_KEY)
+    }
+  } catch {
+    // ignore
+  }
+}
+
+const clearGuestCartStorage = () => {
+  try {
+    localStorage.removeItem(GUEST_CART_KEY)
+  } catch {
+    // ignore
+  }
+}
+
+const normalizeVariantKey = (value) => {
+  const raw = String(value || "").trim()
+  if (!raw || raw === "base") return ""
+  return raw
+}
+
+const parseCompositeLineId = (value) => {
+  const str = String(value || "")
+  const sep = str.indexOf("::")
+  if (sep <= 0) return null
+  return {
+    itemId: str.slice(0, sep),
+    variantId: normalizeVariantKey(str.slice(sep + 2)),
+  }
+}
+
+const resolveCartEntryId = (items, itemId, variantId = "") => {
+  const normalizedItemId = String(itemId || "")
+  const safeItems = Array.isArray(items) ? items : []
+  const requestedVariant = normalizeVariantKey(variantId)
+
+  const directMatch = safeItems.find((item) => item.id === normalizedItemId)
+  if (directMatch) return directMatch.id
+
+  const composite = parseCompositeLineId(normalizedItemId)
+  if (composite) {
+    const compositeMatch = safeItems.find(
+      (item) =>
+        String(item.itemId || item.productId || "") === composite.itemId &&
+        normalizeVariantKey(item.variantId) === composite.variantId,
+    )
+    if (compositeMatch) return compositeMatch.id
+  }
+
+  const preferredId = buildCartLineId(normalizedItemId, requestedVariant || "base")
+  const exactMatch = safeItems.find((item) => item.id === preferredId)
+  if (exactMatch) return exactMatch.id
+
+  const byItemVariant = safeItems.find(
+    (item) =>
+      String(item.itemId || item.productId || "") === normalizedItemId &&
+      normalizeVariantKey(item.variantId) === requestedVariant,
+  )
+  if (byItemVariant) return byItemVariant.id
+
+  if (!requestedVariant) {
+    const legacyBaseMatch = safeItems.find(
+      (item) =>
+        String(item.itemId || item.productId || item.id || "") === normalizedItemId &&
+        !normalizeVariantKey(item.variantId),
+    )
+    if (legacyBaseMatch) return legacyBaseMatch.id
+  }
+
+  return preferredId
+}
+
+const cartLineKey = (item) => {
+  const baseId = item?.itemId || item?.productId || item?.foodId
+  if (!baseId) {
+    const composite = parseCompositeLineId(item?.id)
+    if (composite) return `${composite.itemId}::${composite.variantId}`
+  }
+  return `${String(baseId || item?.id || "")}::${normalizeVariantKey(item?.variantId)}`
+}
+
+const SYNC_DEBOUNCE_MS = 250
+
+const apiErrorMessage = (err, fallback = "Cart update failed") =>
+  err?.response?.data?.message || err?.message || fallback
+
+export function CartProvider({ children }) {
+  const [cart, setCart] = useState([])
+  const [couponCode, setCouponCode] = useState("")
+  const [restaurantId, setRestaurantId] = useState(null)
+  const [restaurantName, setRestaurantName] = useState("")
+  const [cartReady, setCartReady] = useState(false)
+  const [lastAddEvent, setLastAddEvent] = useState(null)
+  const [lastRemoveEvent, setLastRemoveEvent] = useState(null)
+  const [cartMode, setCartModeState] = useState(readCartMode)
+  const { orderType } = useProfile()
+  const currentMode = toCartMode(orderType)
+
+  const setCartMode = useCallback((mode) => {
+    writeCartMode(mode)
+    setCartModeState(mode)
+  }, [])
+
+  const authRef = useRef(isUserAuthenticated())
+  const loadSeqRef = useRef(0)
+  const mutationSeqRef = useRef(0)
+  const loadedOnceRef = useRef(false)
+
+  // Optimistic cart: quantities the user picked that the server hasn't confirmed yet,
+  // keyed by item+variant (stable across the temp line id and the server's line id).
+  const pendingQtyRef = useRef(new Map())
+  const addInflightRef = useRef(new Set())
+  const syncTimersRef = useRef(new Map())
+
+  const applyServerCart = useCallback((payload) => {
+    let next = normalizeCartData(payload?.items || [])
+    // Keep unconfirmed quantities on screen so a server reply never makes the stepper jump back.
+    if (pendingQtyRef.current.size > 0) {
+      next = next
+        .map((line) => {
+          const pending = pendingQtyRef.current.get(cartLineKey(line))
+          return pending ? { ...line, quantity: pending.qty } : line
+        })
+        .filter((line) => line.quantity > 0)
+    }
+    const serverLines = next
+    setCart((prev) => {
+      if (addInflightRef.current.size === 0) return serverLines
+      // A just-added line whose add request is still in flight stays visible.
+      const serverKeys = new Set(serverLines.map(cartLineKey))
+      const inflight = normalizeCartData(prev).filter(
+        (line) => addInflightRef.current.has(cartLineKey(line)) && !serverKeys.has(cartLineKey(line)),
+      )
+      return inflight.length ? [...serverLines, ...inflight] : serverLines
+    })
+    setCouponCode(payload?.couponCode || "")
+    setRestaurantId(payload?.restaurantId || null)
+    setRestaurantName(payload?.restaurantName || "")
+    clearGuestCartStorage()
+    return next
+  }, [])
+
+  const loadDbCart = useCallback(async () => {
+    const seq = ++loadSeqRef.current
+    try {
+      const response = await foodCartAPI.getCart()
+      if (seq !== loadSeqRef.current) return []
+      const payload = extractCartPayload(response)
+      return applyServerCart(payload)
+    } catch (err) {
+      if (seq === loadSeqRef.current) {
+        debugError("Failed to load food cart", err)
+        setCartReady(true)
+      }
+      return []
+    } finally {
+      if (seq === loadSeqRef.current) {
+        setCartReady(true)
+        loadedOnceRef.current = true
+      }
+    }
+  }, [applyServerCart])
+
+  // Push the latest picked quantity of one line to the server. Rapid +/- taps are debounced
+  // into a single request; the screen already shows the new quantity.
+  const flushLine = useCallback(async (key) => {
+    syncTimersRef.current.delete(key)
+    if (addInflightRef.current.has(key)) return // the add's reply flushes it
+    const entry = pendingQtyRef.current.get(key)
+    if (!entry) return
+    if (!entry.lineId) {
+      pendingQtyRef.current.delete(key)
+      return
+    }
+    const seq = ++mutationSeqRef.current
+    try {
+      const response =
+        entry.qty > 0
+          ? await foodCartAPI.updateItem(entry.lineId, { quantity: entry.qty })
+          : await foodCartAPI.removeItem(entry.lineId)
+      if (pendingQtyRef.current.get(key) === entry) pendingQtyRef.current.delete(key)
+      if (seq === mutationSeqRef.current) applyServerCart(extractCartPayload(response))
+    } catch (err) {
+      debugError("cart sync failed", err)
+      if (pendingQtyRef.current.get(key) === entry) pendingQtyRef.current.delete(key)
+      loadDbCart()
+    }
+  }, [applyServerCart, loadDbCart])
+
+  const scheduleFlush = useCallback((key) => {
+    const timers = syncTimersRef.current
+    if (timers.has(key)) clearTimeout(timers.get(key))
+    timers.set(key, setTimeout(() => flushLine(key), SYNC_DEBOUNCE_MS))
+  }, [flushLine])
+
+  const resetPendingSync = () => {
+    syncTimersRef.current.forEach((timer) => clearTimeout(timer))
+    syncTimersRef.current.clear()
+    pendingQtyRef.current.clear()
+    addInflightRef.current.clear()
+  }
+
+  // Initialize once: DB cart for auth users, guest LS otherwise (never persist auth cart to LS).
+  useEffect(() => {
+    const authed = isUserAuthenticated()
+    authRef.current = authed
+    if (authed) {
+      clearGuestCartStorage()
+      loadDbCart()
+    } else {
+      setCart(readGuestCart())
+      setCartReady(true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Reload cart once when user logs in (not on every token sync).
+  useEffect(() => {
+    const onAuthChanged = () => {
+      const nextAuthed = isUserAuthenticated()
+      const wasAuthed = authRef.current
+      authRef.current = nextAuthed
+      if (nextAuthed && !wasAuthed) {
+        loadedOnceRef.current = false
+        clearGuestCartStorage()
+        loadDbCart()
+      } else if (!nextAuthed && wasAuthed) {
+        resetPendingSync()
+        setCart([])
+        setCouponCode("")
+        setRestaurantId(null)
+        setRestaurantName("")
+        clearGuestCartStorage()
+        setCartReady(true)
+      }
+    }
+    window.addEventListener("userAuthChanged", onAuthChanged)
+    window.addEventListener("storage", onAuthChanged)
+    return () => {
+      window.removeEventListener("userAuthChanged", onAuthChanged)
+      window.removeEventListener("storage", onAuthChanged)
+    }
+  }, [loadDbCart])
+
+  // Guest-only localStorage persistence
+  useEffect(() => {
+    if (!cartReady) return
+    if (authRef.current || isUserAuthenticated()) {
+      clearGuestCartStorage()
+      return
+    }
+    writeGuestCart(cart)
+  }, [cart, cartReady])
+
+  const normalizedCart = useMemo(() => normalizeCartData(cart), [cart])
+
+  // Empty cart frees the mode; a cart with no recorded mode (older build / other device)
+  // is adopted by the tab the user is currently on.
+  useEffect(() => {
+    if (!cartReady) return
+    if (normalizedCart.length === 0) {
+      if (cartMode) setCartMode(null)
+    } else if (!cartMode) {
+      setCartMode(currentMode)
+    }
+  }, [cartReady, normalizedCart.length, cartMode, currentMode, setCartMode])
+
+  const isCartModeMismatch = Boolean(cartMode) && cartMode !== currentMode
+  // What the current tab sees: the cart of the other mode stays hidden.
+  const visibleCart = useMemo(
+    () => (isCartModeMismatch ? [] : normalizedCart),
+    [isCartModeMismatch, normalizedCart],
+  )
+
+  const triggerAddAnimation = (item, sourcePosition) => {
+    if (!sourcePosition) return
+    setLastAddEvent({
+      product: {
+        id: item.id || item.itemId,
+        name: item.name,
+        imageUrl: item.image || item.imageUrl,
+      },
+      sourcePosition,
+    })
+    setTimeout(() => setLastAddEvent(null), 1500)
+  }
+
+  const triggerRemoveAnimation = (item, sourcePosition, productInfo) => {
+    if (!sourcePosition || !productInfo) return
+    setLastRemoveEvent({
+      product: {
+        id: productInfo.id || item?.id,
+        name: productInfo.name || item?.name,
+        imageUrl:
+          productInfo.imageUrl ||
+          productInfo.image ||
+          item?.image ||
+          item?.imageUrl,
+      },
+      sourcePosition,
+    })
+    setTimeout(() => setLastRemoveEvent(null), 1500)
+  }
+
+  const clearCart = useCallback(async () => {
+    resetPendingSync()
+    if (!isUserAuthenticated()) {
+      setCart([])
+      clearGuestCartStorage()
+      return { ok: true }
+    }
+    const seq = ++mutationSeqRef.current
+    try {
+      const response = await foodCartAPI.clearCart()
+      if (seq !== mutationSeqRef.current) return { ok: true }
+      applyServerCart(extractCartPayload(response))
+      return { ok: true }
+    } catch (err) {
+      debugError("clearCart failed", err)
+      return { ok: false, error: apiErrorMessage(err) }
+    }
+  }, [applyServerCart])
+
+  const addToCart = useCallback(
+    async (item, sourcePosition = null) => {
+      if (!item) return { ok: false, error: "Invalid item" }
+
+      if (normalizedCart.length > 0 && isCartModeMismatch) {
+        const error = `Your ${cartModeLabel(cartMode)} cart already has items. Clear it to start a ${cartModeLabel(currentMode)} order.`
+        toast.error(error, {
+          id: "cart-mode-mismatch",
+          action: {
+            label: "Clear cart",
+            onClick: () => clearCart(),
+          },
+          actionButtonStyle: {
+            background: "linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)",
+            color: "#ffffff",
+            fontWeight: 700,
+            fontSize: "12px",
+            padding: "6px 14px",
+            height: "auto",
+            borderRadius: "9999px",
+            border: "none",
+            boxShadow: "0 4px 10px rgba(220, 38, 38, 0.35)",
+            whiteSpace: "nowrap",
+          },
+        })
+        return { ok: false, error, code: "ORDER_TYPE_MISMATCH" }
+      }
+      if (normalizedCart.length === 0) setCartMode(currentMode)
+
+      const authed = isUserAuthenticated()
+      if (!authed) {
+        // Guest path (local only)
+        if (normalizedCart.length > 0) {
+          const currentOrderType = getItemOrderType(normalizedCart[0])
+          const nextOrderType = getItemOrderType(item)
+          if (currentOrderType === "food" && nextOrderType === "food") {
+            const firstName = String(normalizedCart[0]?.restaurant || "")
+              .trim()
+              .toLowerCase()
+            const nextName = String(item?.restaurant || "")
+              .trim()
+              .toLowerCase()
+            const firstId = normalizedCart[0]?.restaurantId
+            const nextId = item?.restaurantId
+            if (
+              (firstName && nextName && firstName !== nextName) ||
+              (!firstName &&
+                !nextName &&
+                firstId &&
+                nextId &&
+                String(firstId) !== String(nextId))
+            ) {
+              return {
+                ok: false,
+                error: 'Cart already contains items from "' + (normalizedCart[0]?.restaurant || "another restaurant") + '". Please clear cart or complete order first.',
+                code: "RESTAURANT_MISMATCH",
+              }
+            }
+          }
+        }
+        if (!item?.restaurantId && !item?.restaurant) {
+          return {
+            ok: false,
+            error: "Item is missing restaurant information. Please refresh the page.",
+            code: "MISSING_RESTAURANT",
+          }
+        }
+
+        setCart((prev) => {
+          const safePrev = normalizeCartData(prev)
+          const lineId =
+            item.id ||
+            buildCartLineId(
+              item.itemId || item.productId || item.id,
+              item.variantId || "",
+            )
+          const existing = safePrev.find((i) => i.id === lineId)
+          triggerAddAnimation({ ...item, id: lineId }, sourcePosition)
+          if (existing) {
+            return safePrev.map((i) =>
+              i.id === lineId ? { ...i, quantity: i.quantity + (Number(item.quantity) || 1) } : i,
+            )
+          }
+          return [
+            ...safePrev,
+            {
+              ...item,
+              id: lineId,
+              lineItemId: lineId,
+              quantity: Number(item.quantity) || 1,
+            },
+          ]
+        })
+        return { ok: true }
+      }
+
+      const key = cartLineKey(item)
+      const qtyToAdd = Number(item.quantity) || 1
+      const existingLine = normalizedCart.find((i) => cartLineKey(i) === key)
+
+      // Same line already in the cart: bump it locally and sync in the background.
+      if (existingLine && item.itemType !== "addon") {
+        const nextQty = (pendingQtyRef.current.get(key)?.qty ?? existingLine.quantity) + qtyToAdd
+        pendingQtyRef.current.set(key, { qty: nextQty, lineId: existingLine.lineItemId || existingLine.id })
+        setCart((prev) =>
+          normalizeCartData(prev).map((i) => (cartLineKey(i) === key ? { ...i, quantity: nextQty } : i)),
+        )
+        triggerAddAnimation({ ...item, id: existingLine.id }, sourcePosition)
+        scheduleFlush(key)
+        return { ok: true }
+      }
+
+      // New line: show it right away when the server will almost surely accept it
+      // (empty cart or same restaurant). Otherwise wait, so a mismatch never flashes in.
+      const optimistic =
+        item.itemType !== "addon" &&
+        (normalizedCart.length === 0 ||
+          (Boolean(item.restaurantId) &&
+            normalizedCart.every((i) => String(i.restaurantId || "") === String(item.restaurantId))))
+      const tempLineId =
+        item.id || buildCartLineId(item.itemId || item.productId || item.id, item.variantId || "")
+
+      if (optimistic) {
+        addInflightRef.current.add(key)
+        setCart((prev) => [
+          ...normalizeCartData(prev),
+          { ...item, id: tempLineId, lineItemId: tempLineId, quantity: qtyToAdd },
+        ])
+        triggerAddAnimation({ ...item, id: tempLineId }, sourcePosition)
+      }
+
+      const seq = ++mutationSeqRef.current
+      try {
+        const response = await foodCartAPI.addItem({
+          itemId: item.itemId || item.productId || item.foodId || item.id,
+          variantId: item.variantId || "",
+          quantity: qtyToAdd,
+          ...(item.itemType === "addon" ? { itemType: "addon" } : {}),
+        })
+        const payload = extractCartPayload(response)
+        if (optimistic) {
+          addInflightRef.current.delete(key)
+          // Taps made while the add was in flight were kept locally; point them at the real line.
+          const entry = pendingQtyRef.current.get(key)
+          const serverLine = normalizeCartData(payload.items).find((l) => cartLineKey(l) === key)
+          if (entry && serverLine) entry.lineId = serverLine.lineItemId
+          applyServerCart(payload)
+          if (entry) flushLine(key)
+          return { ok: true, cart: payload.items }
+        }
+        if (seq !== mutationSeqRef.current) {
+          return { ok: true }
+        }
+        applyServerCart(payload)
+        triggerAddAnimation(item, sourcePosition)
+        return { ok: true, cart: payload.items }
+      } catch (err) {
+        if (optimistic) {
+          addInflightRef.current.delete(key)
+          pendingQtyRef.current.delete(key)
+          setCart((prev) => normalizeCartData(prev).filter((i) => i.id !== tempLineId))
+        }
+        const code = err?.response?.data?.code || err?.code
+        const message = apiErrorMessage(err)
+        if (code === "RESTAURANT_MISMATCH" || /another restaurant|already contains/i.test(message)) {
+          return { ok: false, error: message, code: "RESTAURANT_MISMATCH" }
+        }
+        return { ok: false, error: message }
+      }
+    },
+    [applyServerCart, normalizedCart, isCartModeMismatch, cartMode, currentMode, setCartMode, clearCart, scheduleFlush, flushLine],
+  )
+
+  const removeFromCart = useCallback(
+    async (itemId, sourcePosition = null, productInfo = null) => {
+      const resolvedItemId = resolveCartEntryId(normalizedCart, itemId)
+      const itemToRemove = normalizedCart.find((i) => i.id === resolvedItemId)
+
+      if (!isUserAuthenticated()) {
+        triggerRemoveAnimation(itemToRemove, sourcePosition, productInfo)
+        setCart((prev) => normalizeCartData(prev).filter((i) => i.id !== resolvedItemId))
+        return
+      }
+
+      const lineId = itemToRemove?.lineItemId || itemToRemove?.id || resolvedItemId
+      const seq = ++mutationSeqRef.current
+      try {
+        const response = await foodCartAPI.removeItem(lineId)
+        if (seq !== mutationSeqRef.current) return
+        applyServerCart(extractCartPayload(response))
+        triggerRemoveAnimation(itemToRemove, sourcePosition, productInfo)
+      } catch (err) {
+        debugError("removeFromCart failed", err)
+      }
+    },
+    [applyServerCart, normalizedCart],
+  )
+
+  const updateQuantity = useCallback(
+    async (itemId, quantity, sourcePosition = null, productInfo = null) => {
+      const resolvedItemId = resolveCartEntryId(normalizedCart, itemId)
+      const existingItem = normalizedCart.find((i) => i.id === resolvedItemId)
+
+      if (!isUserAuthenticated()) {
+        if (quantity <= 0) {
+          triggerRemoveAnimation(existingItem, sourcePosition, productInfo)
+          setCart((prev) => normalizeCartData(prev).filter((i) => i.id !== resolvedItemId))
+          return
+        }
+        if (existingItem && quantity < existingItem.quantity) {
+          triggerRemoveAnimation(existingItem, sourcePosition, productInfo)
+        }
+        setCart((prev) =>
+          normalizeCartData(prev).map((i) =>
+            i.id === resolvedItemId ? { ...i, quantity } : i,
+          ),
+        )
+        return
+      }
+
+      const lineId = existingItem?.lineItemId || existingItem?.id || resolvedItemId
+      if (!lineId) return
+
+      // Optimistic: the stepper moves instantly; the server is synced (debounced) behind it.
+      const key = cartLineKey(existingItem || { id: resolvedItemId })
+      const nextQty = Math.max(0, Math.floor(Number(quantity) || 0))
+      if (existingItem && nextQty < existingItem.quantity) {
+        triggerRemoveAnimation(existingItem, sourcePosition, productInfo)
+      } else if (existingItem && nextQty > existingItem.quantity) {
+        triggerAddAnimation(existingItem, sourcePosition)
+      }
+      pendingQtyRef.current.set(key, { qty: nextQty, lineId })
+      setCart((prev) => {
+        const safePrev = normalizeCartData(prev)
+        return nextQty <= 0
+          ? safePrev.filter((i) => i.id !== resolvedItemId)
+          : safePrev.map((i) => (i.id === resolvedItemId ? { ...i, quantity: nextQty } : i))
+      })
+      scheduleFlush(key)
+    },
+    [normalizedCart, scheduleFlush],
+  )
+
+  const getCartCount = useCallback(
+    () => visibleCart.reduce((total, item) => total + (item.quantity || 0), 0),
+    [visibleCart],
+  )
+
+  const isInCart = useCallback(
+    (itemId, variantId = "") => {
+      const resolvedItemId = resolveCartEntryId(visibleCart, itemId, variantId)
+      return visibleCart.some((i) => i.id === resolvedItemId)
+    },
+    [visibleCart],
+  )
+
+  const getCartItem = useCallback(
+    (itemId, variantId = "") => {
+      const resolvedItemId = resolveCartEntryId(visibleCart, itemId, variantId)
+      return visibleCart.find((i) => i.id === resolvedItemId) || null
+    },
+    [visibleCart],
+  )
+
+  const replaceCart = useCallback(
+    async (items) => {
+      const normalizedItems = normalizeCartData(items).filter((item) => {
+        const quantity = Number(item?.quantity)
+        return (
+          item?.id &&
+          (item?.restaurantId || item?.restaurant) &&
+          Number.isFinite(quantity) &&
+          quantity > 0
+        )
+      })
+
+      if (!isUserAuthenticated()) {
+        setCart(normalizedItems)
+        return { ok: true, count: normalizedItems.length }
+      }
+
+      const seq = ++mutationSeqRef.current
+      try {
+        await foodCartAPI.clearCart()
+        let lastPayload = { items: [], couponCode: "", restaurantId: null, restaurantName: "" }
+        for (const item of normalizedItems) {
+          const response = await foodCartAPI.addItem({
+            itemId: item.itemId || item.productId || item.id,
+            variantId: item.variantId || "",
+            quantity: item.quantity || 1,
+          })
+          lastPayload = extractCartPayload(response)
+        }
+        if (seq !== mutationSeqRef.current) return { ok: true, count: 0 }
+        applyServerCart(lastPayload)
+        return { ok: true, count: lastPayload.items?.length || 0 }
+      } catch (err) {
+        debugError("replaceCart failed", err)
+        return { ok: false, error: apiErrorMessage(err) }
+      }
+    },
+    [applyServerCart],
+  )
+
+  const cleanCartForRestaurant = useCallback(
+    async (targetRestaurantId, targetRestaurantName) => {
+      if (!isUserAuthenticated()) {
+        setCart((prev) => {
+          const safePrev = normalizeCartData(prev)
+          const normalizeName = (name) => (name ? String(name).trim().toLowerCase() : "")
+          const targetName = normalizeName(targetRestaurantName)
+          return safePrev.filter((item) => {
+            const itemName = normalizeName(item?.restaurant)
+            if (targetName && itemName) return itemName === targetName
+            if (targetRestaurantId && item?.restaurantId) {
+              return String(item.restaurantId) === String(targetRestaurantId)
+            }
+            return false
+          })
+        })
+        return
+      }
+
+      const keep = normalizedCart.filter((item) => {
+        const normalizeName = (name) => (name ? String(name).trim().toLowerCase() : "")
+        const targetName = normalizeName(targetRestaurantName)
+        const itemName = normalizeName(item?.restaurant)
+        if (targetName && itemName) return itemName === targetName
+        if (targetRestaurantId && item?.restaurantId) {
+          return String(item.restaurantId) === String(targetRestaurantId)
+        }
+        return false
+      })
+
+      if (keep.length === normalizedCart.length) return
+      if (keep.length === 0) {
+        await clearCart()
+        return
+      }
+      await replaceCart(keep)
+    },
+    [clearCart, normalizedCart, replaceCart],
+  )
+
+  const setCartCoupon = useCallback(
+    async (code = "") => {
+      if (!isUserAuthenticated()) {
+        setCouponCode(String(code || "").trim().toUpperCase())
+        return { ok: true }
+      }
+      try {
+        const response = await foodCartAPI.setCoupon(code)
+        applyServerCart(extractCartPayload(response))
+        return { ok: true }
+      } catch (err) {
+        return { ok: false, error: apiErrorMessage(err) }
+      }
+    },
+    [applyServerCart],
+  )
+
+  const refreshCart = useCallback(async () => {
+    if (!isUserAuthenticated()) return visibleCart
+    return loadDbCart()
+  }, [loadDbCart, visibleCart])
+
+  const cartForAnimation = useMemo(() => {
+    const items = visibleCart.map((item) => ({
+      product: {
+        id: item.id,
+        name: item.name,
+        imageUrl: item.image || item.imageUrl,
+      },
+      quantity: item.quantity || 1,
+    }))
+    const itemCount = visibleCart.reduce((total, item) => total + (item.quantity || 0), 0)
+    const total = visibleCart.reduce(
+      (sum, item) => sum + (item.price || 0) * (item.quantity || 0),
+      0,
+    )
+    return { items, itemCount, total }
+  }, [visibleCart])
+
+  const value = useMemo(
+    () => ({
+      _isProvider: true,
+      cart: visibleCart,
+      // Foodie compatibility: delivery/takeaway share the same server cart when logged in;
+      // it is exposed only to the tab it was started from (see cartMode).
+      deliveryCart: cartMode === "takeaway" ? [] : normalizedCart,
+      takeawayCart: cartMode === "takeaway" ? normalizedCart : [],
+      cartMode,
+      items: cartForAnimation.items,
+      itemCount: cartForAnimation.itemCount,
+      total: cartForAnimation.total,
+      cartReady,
+      couponCode: isCartModeMismatch ? "" : couponCode,
+      restaurantId: isCartModeMismatch ? null : restaurantId,
+      restaurantName: isCartModeMismatch ? "" : restaurantName,
+      lastAddEvent,
+      lastRemoveEvent,
+      addToCart,
+      removeFromCart,
+      updateQuantity,
+      getCartCount,
+      isInCart,
+      getCartItem,
+      clearCart,
+      cleanCartForRestaurant,
+      replaceCart,
+      setCartCoupon,
+      refreshCart,
+    }),
+    [
+      visibleCart,
+      normalizedCart,
+      cartMode,
+      isCartModeMismatch,
+      cartForAnimation,
+      cartReady,
+      couponCode,
+      restaurantId,
+      restaurantName,
+      lastAddEvent,
+      lastRemoveEvent,
+      addToCart,
+      removeFromCart,
+      updateQuantity,
+      getCartCount,
+      isInCart,
+      getCartItem,
+      clearCart,
+      cleanCartForRestaurant,
+      replaceCart,
+      setCartCoupon,
+      refreshCart,
+    ],
+  )
+
+  return <CartContext.Provider value={value}>{children}</CartContext.Provider>
+}
+
+export function useCart() {
+  const context = useContext(CartContext)
+  if (!context || context._isProvider !== true) {
+    if (process.env.NODE_ENV === "development") {
+      debugWarn("⚠️ useCart called outside CartProvider. Using default values.")
+    }
+    return defaultCartContext
+  }
+  return context
+}

@@ -1,44 +1,19 @@
 import React from "react";
 import { Dimensions, View } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
 import { Trash2, CheckCircle2 } from "lucide-react-native";
 import { toast } from "@/lib/toast";
-import { Text } from "@/native/ui";
-import { colors, fonts, shadow } from "@/theme";
+import { AppImage, Text } from "@/native/ui";
+import { colors, shadow } from "@/theme";
 import { markBrandToastShown } from "./toastGuard";
 
-const WORDMARK_SIZES = {
-  sm: { box: 40, font: 11 },
-  md: { box: 48, font: 13 },
-  lg: { box: 56, font: 15 },
-};
-
-/** "Hello / Parth" wordmark (the login screen's Pacifico lettering, one word under the other) on the brand red, as the
- *  leading icon of branded toasts. */
+/** Foodie web: the toasts lead with /logo-icon.webp (the square Foodie icon) in a rounded box (h-12 / h-14). */
+const FOODIE_ICON = require("../../assets/public/images/logo-icon.webp");
 export const BrandToastIcon = ({ size = "lg" }) => {
-  const dim = WORDMARK_SIZES[size] || WORDMARK_SIZES.lg;
-  const word = {
-    fontFamily: fonts.pacifico,
-    fontSize: dim.font,
-    // line-height 0.95 (Pacifico's own ascent is tall; RN clips glyphs below ~1.3x, so keep the line a bit taller)
-    lineHeight: Math.round(dim.font * 1.3),
-    color: colors.white,
-    textShadowColor: "rgba(0,0,0,0.25)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-    includeFontPadding: false,
-  };
+  const box = size === "md" ? 48 : size === "sm" ? 40 : 56;
   return (
-    <LinearGradient
-      colors={["#DC2626", "#991B1B"]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      accessibilityLabel="Foodie"
-      style={{ width: dim.box, height: dim.box, flexShrink: 0, borderRadius: 16, alignItems: "center", justifyContent: "center", ...shadow.lg }}
-    >
-      <Text style={[word, { marginBottom: -dim.font * 0.35 }]}>Hello</Text>
-      <Text style={word}>Parth</Text>
-    </LinearGradient>
+    <View accessibilityLabel="Foodie Delivery Partner" style={{ width: box, height: box, borderRadius: 16, overflow: "hidden", flexShrink: 0 }}>
+      <AppImage src={FOODIE_ICON} contentFit="contain" style={{ width: box, height: box }} />
+    </View>
   );
 };
 

@@ -6,6 +6,7 @@ import {
   Bike,
   Ticket,
   Star,
+  Gift,
   LogOut,
   Briefcase,
   Trash2,
@@ -44,7 +45,7 @@ export const ProfileV2 = () => {
   const keyboardOffset = useKeyboardOffset()
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [referralReward, setReferralReward] = useState(0)
+  const [referralStats, setReferralStats] = useState(null)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [logoutSubmitting, setLogoutSubmitting] = useState(false)
   const [leaving, setLeaving] = useState(false) // signed out: the popup goes away at once, no fade over the login screen
@@ -91,16 +92,9 @@ export const ProfileV2 = () => {
   useEffect(() => {
     if (!tabActive) return
     deliveryAPI.getReferralStats().then((res) => {
-      const reward = res?.data?.data?.stats?.rewardAmount
-      setReferralReward(Number(reward) || 0)
+      setReferralStats(res?.data?.data?.stats || null)
     }).catch(() => {})
   }, [tabActive])
-
-  const refId = profile?._id || profile?.id || profile?.referralCode || ""
-  const referralLink = refId ? `${window.location.origin}/food/delivery/signup?ref=${encodeURIComponent(String(refId))}` : ""
-  // (web: handleShareReferral is defined but no button uses it)
-  void referralLink
-  void referralReward
 
   const handleLogout = async () => {
     if (logoutSubmitting) return
@@ -208,6 +202,30 @@ export const ProfileV2 = () => {
               <Text style={styles.navText}>My reviews</Text>
             </Pressable>
           </View>
+
+          {/* Refer & Earn banner (hidden when admin turns off Delivery Refer & Earn) */}
+          {referralStats?.visible ? (
+            <Pressable
+              onPress={() => navigate("/food/delivery/profile/refer")}
+              style={({ pressed }) => [styles.referCard, pressed && { backgroundColor: colors.gray[50] }]}
+            >
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.referTitle}>Refer & Earn</Text>
+                <Text style={styles.referSub}>
+                  {referralStats?.enabled && referralStats?.maxEarning > 0
+                    ? `Earn up to ₹${Number(referralStats.maxEarning).toLocaleString("en-IN")} when friends join as delivery partners`
+                    : "Invite friends to deliver with Foodie"}
+                </Text>
+                <View style={styles.referLinkRow}>
+                  <Text style={styles.referLink}>Invite friends</Text>
+                  <ChevronRight size={14} color="#0E4B9C" />
+                </View>
+              </View>
+              <View style={styles.referIcon}>
+                <Gift size={24} color="#0E4B9C" />
+              </View>
+            </Pressable>
+          ) : null}
 
           {/* Sections */}
           <View style={{ gap: 16 }}>
@@ -448,6 +466,12 @@ const styles = StyleSheet.create({
   navBtn: { flex: 1, backgroundColor: colors.white, borderRadius: 14, padding: 16, alignItems: "center", gap: 8, borderWidth: 1, borderColor: "transparent" },
   navIcon: { borderRadius: 9999, backgroundColor: colors.gray[50], padding: 12 },
   navText: { fontSize: 14, lineHeight: 20, fontWeight: "700", color: colors.gray[900] },
+  referCard: { backgroundColor: colors.white, borderRadius: 12, padding: 16, marginBottom: 24, flexDirection: "row", alignItems: "center", gap: 16 },
+  referTitle: { fontSize: 14, lineHeight: 20, fontWeight: "700", color: colors.gray[900] },
+  referSub: { marginTop: 2, fontSize: 12, lineHeight: 16, color: colors.gray[500] },
+  referLinkRow: { marginTop: 8, flexDirection: "row", alignItems: "center", gap: 2 },
+  referLink: { fontSize: 12, lineHeight: 16, fontWeight: "700", color: "#0E4B9C" },
+  referIcon: { height: 48, width: 48, borderRadius: 24, backgroundColor: colors.blue[50], alignItems: "center", justifyContent: "center" },
   sectionTitle: { color: colors.gray[400], fontSize: 10, fontFamily: fonts.sora, fontWeight: "900", letterSpacing: 2, marginBottom: 12, paddingHorizontal: 4 },
   row: { backgroundColor: colors.white, borderRadius: 14, padding: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   dangerRow: {

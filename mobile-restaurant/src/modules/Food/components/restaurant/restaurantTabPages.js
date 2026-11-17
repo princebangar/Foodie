@@ -12,6 +12,7 @@ const LAYER_BY_PATH = {
   '/food/restaurant/menu': 'inventory',
   '/food/restaurant/feedback': 'feedback',
   '/food/restaurant/reviews': 'feedback',
+  '/food/restaurant/feedback-complaints': 'feedback',
   '/food/restaurant/explore': 'explore',
   '/food/restaurant/settings': 'explore',
 };

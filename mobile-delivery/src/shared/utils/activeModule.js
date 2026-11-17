@@ -1,9 +1,9 @@
 import { FoodApp, FoodUserRouter, TaxiApp, FoodAdminRouter } from './appChunks.js'
 import { preloadBannerImage } from './bannerImage.js'
 
-export const ACTIVE_MODULE_KEY = 'hello_parth_active_module'
+export const ACTIVE_MODULE_KEY = 'foodie_delivery_active_module'
 export const NATIVE_LAST_ROUTE_KEY = 'native_last_route'
-export const LOGIN_RETURN_TO_KEY = 'hello_parth_login_return_to'
+export const LOGIN_RETURN_TO_KEY = 'foodie_delivery_login_return_to'
 
 export const FOOD_ADMIN_HOME = '/admin/food'
 export const TAXI_ADMIN_HOME = '/taxi/admin/dashboard'

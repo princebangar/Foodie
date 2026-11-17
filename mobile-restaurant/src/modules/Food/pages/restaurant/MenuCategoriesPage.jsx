@@ -241,10 +241,10 @@ export default function MenuCategoriesPage() {
 
       if (editingCategory) {
         await restaurantAPI.updateCategory(editingCategory._id || editingCategory.id, payload)
-        toast.success("Category updated")
+        toast.success("Category updated and sent for admin approval")
       } else {
         await restaurantAPI.createCategory(payload)
-        toast.success("Category created")
+        toast.success("Category created and sent for admin approval")
       }
 
       resetModal()
@@ -286,7 +286,7 @@ export default function MenuCategoriesPage() {
       await restaurantAPI.updateCategory(category._id || category.id, {
         isActive: !(category?.isActive !== false),
       })
-      toast.success("Category updated")
+      toast.success("Category updated and sent for admin approval")
       fetchCategories()
     } catch (error) {
       toast.error(error?.response?.data?.message || "Failed to update category")
@@ -340,9 +340,9 @@ export default function MenuCategoriesPage() {
               {isGlobal ? (
                 <Text style={s.metaText}>Admin controls this category now, so you can use it but not rename or delete it.</Text>
               ) : status === "approved" ? (
-                <Text style={s.metaText}>Ready to use for your dishes.</Text>
+                <Text style={s.metaText}>Editing this category will send it back for admin approval.</Text>
               ) : (
-                <Text style={s.metaText}>Save this category again to make it usable.</Text>
+                <Text style={s.metaText}>Foods can be added only after approval.</Text>
               )}
               {status === "rejected" && category?.rejectionReason ? (
                 <Text style={[s.metaText, { color: colors.rose[600] }]}>{`Reason: ${category.rejectionReason}`}</Text>
@@ -387,7 +387,7 @@ export default function MenuCategoriesPage() {
         </Pressable>
         <View style={s.flex1}>
           <Text style={s.headerTitle}>Menu Categories</Text>
-          <Text style={s.headerSub}>Create your own categories and use them right away.</Text>
+          <Text style={s.headerSub}>Create categories, track approvals, and resubmit edits safely.</Text>
         </View>
       </View>
 
@@ -395,8 +395,8 @@ export default function MenuCategoriesPage() {
         <View style={s.howCard}>
           <Text style={s.howTitle}>How this works</Text>
           <Text style={s.howText}>
-            Categories you create are ready to use immediately, with no admin approval needed. They stay private to your restaurant.
-            You can pick them when adding or editing a dish.
+            New categories stay pending until admin approval. Editing an approved category sends it back for review.
+            Only approved categories can be used for food uploads.
           </Text>
         </View>
 
@@ -433,8 +433,8 @@ export default function MenuCategoriesPage() {
               <Text style={s.sheetTitle}>{editingCategory ? "Edit Category" : "Create Category"}</Text>
               <Text style={s.headerSub}>
                 {editingCategory
-                  ? "Changes apply right away."
-                  : "Choose the diet scope carefully. It decides which dishes can use this category."}
+                  ? "Any edit sends this category back for admin approval."
+                  : "Choose the diet scope carefully before sending it for approval."}
               </Text>
             </View>
             <Pressable onPress={resetModal} hitSlop={8}>
