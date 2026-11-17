@@ -302,7 +302,7 @@ export const loginStyles = StyleSheet.create({
 })
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#000000", overflow: "hidden" },
+  root: { flex: 1, backgroundColor: "#FFFFFF", overflow: "hidden" },
   sheetWrap: { position: "absolute", left: 0, right: 0, zIndex: 10, maxHeight: "100%" },
   sheet: { flexGrow: 1, backgroundColor: colors.white, paddingHorizontal: 24, paddingTop: 16 },
   title: { marginBottom: 16, textAlign: "center", fontSize: 16, lineHeight: 23, fontWeight: "500", color: "#596378" },

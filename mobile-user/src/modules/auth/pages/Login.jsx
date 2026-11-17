@@ -19,7 +19,7 @@ import { Text, TextInput } from "@/native/ui"
 import { StatusBar } from "@/native/ui/SectionStatusBar"
 import { LoginExitGuard } from "@/native/ui/LoginExitGuard"
 import { Spin } from "@/shared/components/Loader"
-import { alpha, colors, makeStyles, useTheme } from "@/theme"
+import { alpha, colors, makeStyles, useLightWindowBackground, useTheme } from "@/theme"
 import useKeyboardOffset from "@/modules/Taxi/shared/hooks/useKeyboardOffset"
 import { authAPI, userAPI } from "@food/api"
 import { setAuthData } from "@food/utils/auth"
@@ -83,6 +83,8 @@ export default function UnifiedOTPFastLogin() {
   const submitting = useRef(false)
   const otpRefs = useRef([])
   const otpSlide = useRef(new Animated.Value(winW)).current
+  // the keyboard opening/closing shows the window behind the page for a moment: keep it white like this page
+  useLightWindowBackground()
 
   const SESSION_KEY = "user_auth_session_data"
 
@@ -706,7 +708,7 @@ export default function UnifiedOTPFastLogin() {
 }
 
 const useStyles = makeStyles(({ dark }) => ({
-  root: { flex: 1, backgroundColor: "#000000", overflow: "hidden" },
+  root: { flex: 1, backgroundColor: dark ? "#0a0a0a" : colors.white, overflow: "hidden" },
   skip: {
     position: "absolute",
     right: 16,

@@ -16,6 +16,7 @@ import { FontScope, Toaster } from '@/native/ui';
 import { PaymentHost } from '@/native/PaymentHost';
 import { AnimatedSplash, SPLASH_BG } from '@/native/AnimatedSplash';
 import { markSplashDone } from '@/native/splashState';
+import { preloadLoginImages } from '@/modules/auth/components/LoginImageSlider';
 import { NavBarScrim } from '@/native/NavBarScrim';
 import { store } from '@/appstore/store';
 import AppShell from '@/appstore/AppShell';
@@ -35,7 +36,11 @@ export default function RootLayout() {
   const [storageReady, setStorageReady] = useState(false);
 
   useEffect(() => {
-    hydrateStorage().finally(() => setStorageReady(true));
+    hydrateStorage().finally(() => {
+      // signed out: the login banners start downloading now, while the splash plays
+      if (!localStorage.getItem('user_accessToken')) preloadLoginImages('user');
+      setStorageReady(true);
+    });
   }, []);
 
   // the fonts are embedded in the app (expo-font plugin in app.json), so only the stored session is awaited

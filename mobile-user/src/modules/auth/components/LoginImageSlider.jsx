@@ -3,10 +3,13 @@
 // or more images the track is [last, ...images, first] so the loop always slides forward, then jumps to the real slide
 // unseen. Autoplay every 3.5 s, swipe to move (pauses autoplay while dragging). The last list is kept in localStorage
 // so the slides show at once on the next open. Same exports: useLoginImageSlider, LoginImageSlider, LoginSliderDots.
+// Built-in banners (src/assets/login-defaults) show until the admin list is on the phone; a new list replaces the shown
+// one only after its images have downloaded, at the next slide change, with a short fade (no blank or half-drawn slide).
 import React, { useEffect, useRef, useState } from "react"
 import { Animated, Easing, PanResponder, StyleSheet, View } from "react-native"
 import { Image as ExpoImage } from "expo-image"
 import api from "@food/api"
+import DEFAULT_LOGIN_SLIDES from "../../../assets/login-defaults/index.js"
 
 const AUTOPLAY_MS = 3500
 const SLIDE_MS = 550
@@ -32,28 +35,83 @@ const storeImages = (appType, list) => {
   }
 }
 
+// The list request + image downloads start at app open (root layout, while the splash plays), not when the login
+// screen mounts: on a slow network the slides are then ready (or already on disk) when the login appears.
+const LIST_FRESH_MS = 60 * 1000
+const requests = new Map() // appType -> { at, promise }
+const prefetchUrls = (list) => {
+  const urls = list.map(({ imageUrl }) => imageUrl).filter(Boolean)
+  if (urls.length) ExpoImage.prefetch(urls, "memory-disk").catch(() => {})
+}
+
+/** Fetch the admin list (once a minute at most) and download its images to the disk cache. Resolves to the list or null. */
+export function preloadLoginImages(appType) {
+  const current = requests.get(appType)
+  if (current && Date.now() - current.at < LIST_FRESH_MS) return current.promise
+  // the slides saved last time: make sure their files are in memory before the list request comes back
+  const saved = imagesByApp.get(appType) || readStoredImages(appType)
+  if (saved.length) prefetchUrls(saved)
+  const promise = api
+    .get(`/food/login-pages/${appType}/images/public`)
+    .then((res) => {
+      const list = res?.data?.data?.images
+      if (!Array.isArray(list)) return null
+      imagesByApp.set(appType, list)
+      storeImages(appType, list)
+      prefetchUrls(list)
+      return list
+    })
+    .catch(() => {
+      requests.delete(appType)
+      return null
+    })
+  requests.set(appType, { at: Date.now(), promise })
+  return promise
+}
+
+const slideKey = (item) => item?.imageUrl || item?._id
+const sameSlides = (a, b) => a.length === b.length && a.every((item, i) => slideKey(item) === slideKey(b[i]))
+const downloadAll = (list) => {
+  const urls = list.map(({ imageUrl }) => imageUrl).filter(Boolean)
+  return urls.length ? ExpoImage.prefetch(urls, "memory-disk").catch(() => false) : Promise.resolve(true)
+}
+const initialSlides = (appType) => {
+  const list = imagesByApp.get(appType) || readStoredImages(appType)
+  return list.length ? list : DEFAULT_LOGIN_SLIDES
+}
+
 export function useLoginImageSlider(appType) {
-  const [images, setImages] = useState(() => imagesByApp.get(appType) || readStoredImages(appType))
+  const [images, setImages] = useState(() => initialSlides(appType))
   const [position, setPosition] = useState(1)
   const [paused, setPaused] = useState(false)
   const count = images.length
+  const imagesRef = useRef(images)
+  imagesRef.current = images
+  // a newer list, already downloaded, waiting for the next slide change
+  const pendingRef = useRef(null)
+
+  const applyPending = () => {
+    const next = pendingRef.current
+    if (!next) return false
+    pendingRef.current = null
+    setImages(next)
+    setPosition(1)
+    return true
+  }
 
   useEffect(() => {
     let cancelled = false
-    api
-      .get(`/food/login-pages/${appType}/images/public`)
-      .then((res) => {
-        const list = res?.data?.data?.images
-        if (!Array.isArray(list)) return
-        imagesByApp.set(appType, list)
-        storeImages(appType, list)
+    preloadLoginImages(appType).then((list) => {
+      if (!list || cancelled) return
+      const next = list.length ? list : DEFAULT_LOGIN_SLIDES
+      if (sameSlides(imagesRef.current, next)) return
+      downloadAll(next).then(() => {
         if (cancelled) return
-        setImages((current) => {
-          const same = current.length === list.length && current.every((item, i) => item.imageUrl === list[i].imageUrl)
-          return same ? current : list
-        })
+        pendingRef.current = next
+        // no autoplay to wait for (0-1 slides on screen): switch now
+        if (imagesRef.current.length < 2) applyPending()
       })
-      .catch(() => {})
+    })
     return () => {
       cancelled = true
     }
@@ -80,7 +138,9 @@ export function useLoginImageSlider(appType) {
 
   useEffect(() => {
     if (count < 2 || paused) return undefined
-    const timer = setTimeout(() => step(1), AUTOPLAY_MS)
+    const timer = setTimeout(() => {
+      if (!applyPending()) step(1)
+    }, AUTOPLAY_MS)
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [count, position, paused])
@@ -104,6 +164,8 @@ export function LoginImageSlider({ slider, height, fallbackColor = "#E23744" }) 
   const x = useRef(new Animated.Value(0)).current
   const base = useRef(0)
   const previousPosition = useRef(position)
+  const previousImages = useRef(images)
+  const fade = useRef(new Animated.Value(1)).current
   const latest = useRef({ position, width, looping, step, setPaused })
   latest.current = { position, width, looping, step, setPaused }
 
@@ -116,7 +178,13 @@ export function LoginImageSlider({ slider, height, fallbackColor = "#E23744" }) 
     const target = targetFor(position)
     const onCopy = looping && (position === 0 || position === count + 1)
     const isLoopJump = looping && ((from === 0 && position === count) || (from === count + 1 && position === 1))
-    if (isLoopJump || from === position) {
+    const listChanged = previousImages.current !== images
+    previousImages.current = images
+    if (listChanged) {
+      fade.setValue(0.35)
+      Animated.timing(fade, { toValue: 1, duration: 320, easing: Easing.out(Easing.quad), useNativeDriver: true }).start()
+    }
+    if (listChanged || isLoopJump || from === position) {
       x.setValue(target)
       base.current = target
       if (onCopy) settle()
@@ -129,7 +197,7 @@ export function LoginImageSlider({ slider, height, fallbackColor = "#E23744" }) 
     })
     return () => anim.stop()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [position, width, count])
+  }, [position, width, count, images])
 
   const pan = useRef(
     PanResponder.create({
@@ -157,11 +225,11 @@ export function LoginImageSlider({ slider, height, fallbackColor = "#E23744" }) 
       {/* The app theme colour behind the slides; only seen before the admin images have ever loaded. */}
       <View style={[StyleSheet.absoluteFill, { backgroundColor: fallbackColor }]} />
       {count > 0 && width > 0 ? (
-        <Animated.View {...pan.panHandlers} style={{ flexDirection: "row", height: "100%", transform: [{ translateX: x }] }}>
+        <Animated.View {...pan.panHandlers} style={{ flexDirection: "row", height: "100%", opacity: fade, transform: [{ translateX: x }] }}>
           {slides.map((image, slide) => (
             <ExpoImage
               key={`${image._id}-${slide}`}
-              source={{ uri: image.imageUrl }}
+              source={image.source || { uri: image.imageUrl }}
               contentFit="cover"
               contentPosition="top"
               cachePolicy="memory-disk"

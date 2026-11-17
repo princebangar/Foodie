@@ -697,7 +697,7 @@ export default function RestaurantLogin() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#000000", overflow: "hidden" },
+  root: { flex: 1, backgroundColor: "#FFFFFF", overflow: "hidden" },
   restoreCard: { maxWidth: 384, borderRadius: 24, padding: 32, alignItems: "stretch", borderWidth: 1, borderColor: colors.gray[100], backgroundColor: colors.white, ...shadow["2xl"] },
   restoreClose: { position: "absolute", top: 16, right: 16, padding: 8, borderRadius: 12, zIndex: 2 },
   restoreIcon: { width: 80, height: 80, borderRadius: 40, backgroundColor: alpha("#DC2626", 0.1), alignItems: "center", justifyContent: "center", alignSelf: "center", marginBottom: 24 },

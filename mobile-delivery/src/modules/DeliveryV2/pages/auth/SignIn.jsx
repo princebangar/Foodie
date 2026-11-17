@@ -806,7 +806,7 @@ export default function DeliverySignIn() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#000000", overflow: "hidden" },
+  root: { flex: 1, backgroundColor: "#FFFFFF", overflow: "hidden" },
   nameLabel: { fontSize: 14, lineHeight: 20, fontWeight: "500", color: colors.gray[700] },
   nameInput: { paddingHorizontal: 16, fontSize: 18, color: "#1C1C1C", paddingVertical: 0 },
   nameError: { fontSize: 13, lineHeight: 18, fontWeight: "500", color: colors.red[600] },

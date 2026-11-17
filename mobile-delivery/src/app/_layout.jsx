@@ -4,6 +4,7 @@
 import React, { useEffect, useState } from 'react';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import * as SystemUI from 'expo-system-ui';
 import * as Notifications from 'expo-notifications';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -61,6 +62,8 @@ export default function RootLayout() {
     <AnimatedSplash ready={ready} onShown={() => SplashScreen.hideAsync().catch(() => {})} onDone={() => {
         setSplashDone(true);
         markSplashDone();
+        // the window behind the app (seen for a moment while the keyboard opens / closes) was black in dark mode: white
+        SystemUI.setBackgroundColorAsync('#FFFFFF').catch(() => {});
       }} />
   );
 

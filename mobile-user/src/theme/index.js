@@ -6,6 +6,7 @@
 //   const useStyles = makeStyles((t) => ({ card: { backgroundColor: t.dark ? colors.zinc[900] : colors.white, padding: sp(4) } }));
 //   const s = useStyles();  // re-created only when light/dark changes
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import * as SystemUI from 'expo-system-ui';
 import { StyleSheet } from 'react-native';
 
 // ------------------------------------------------------------------ colors (Tailwind default palette)
@@ -205,6 +206,21 @@ const LIGHT = buildTheme('light');
  * Light/dark for the user app, from the web's 'appTheme' setting (Profile > Appearance saves it and fires
  * THEME_CHANGE_EVENT). Login/auth screens are light only on the web: wrap them in <ForceLight>.
  */
+const windowColor = (scheme) => (scheme === 'dark' ? '#0a0a0a' : '#FFFFFF');
+let lightWindowHolds = 0;
+
+/** A light-only screen (login) keeps the window behind it white while it is open, then gives it back to the theme. */
+export function useLightWindowBackground() {
+  useEffect(() => {
+    lightWindowHolds += 1;
+    SystemUI.setBackgroundColorAsync('#FFFFFF').catch(() => {});
+    return () => {
+      lightWindowHolds -= 1;
+      if (lightWindowHolds === 0) SystemUI.setBackgroundColorAsync(windowColor(readStoredScheme())).catch(() => {});
+    };
+  }, []);
+}
+
 export function ThemeProvider({ children }) {
   const [scheme, setScheme] = useState(readStoredScheme);
   useEffect(() => {
@@ -212,6 +228,11 @@ export function ThemeProvider({ children }) {
     globalThis.addEventListener?.(THEME_CHANGE_EVENT, onChange);
     return () => globalThis.removeEventListener?.(THEME_CHANGE_EVENT, onChange);
   }, []);
+  // the window behind the app shows for a moment while the keyboard opens / closes (it was black): same colour as
+  // the app pages now. Light-only screens (login) hold it white with useLightWindowBackground().
+  useEffect(() => {
+    if (lightWindowHolds === 0) SystemUI.setBackgroundColorAsync(windowColor(scheme)).catch(() => {});
+  }, [scheme]);
   const value = useMemo(() => buildTheme(scheme), [scheme]);
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
