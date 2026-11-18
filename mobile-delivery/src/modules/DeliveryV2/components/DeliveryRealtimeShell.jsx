@@ -11,7 +11,8 @@ import { useEffect, useSyncExternalStore } from 'react';
 import { useDeliveryNotifications } from '@food/hooks/useDeliveryNotifications';
 import { useRiderLocationSync } from '@/modules/DeliveryV2/hooks/useRiderLocationSync';
 import { useDeliveryStore } from '@/modules/DeliveryV2/store/useDeliveryStore';
-import { startOnlineLocationUpdates, stopOnlineLocationUpdates } from '@/lib/riderLocation';
+import { hasLocationPermission, startOnlineLocationUpdates, stopOnlineLocationUpdates } from '@/lib/riderLocation';
+import { deliveryAPI } from '@food/api';
 
 let current = null;
 let last = null; // a kept-alive screen re-rendering in the commit that signs out still gets the last value
@@ -33,8 +34,18 @@ export function useDeliveryNotificationsContext() {
 function useOnlineLocationService() {
   const isOnline = useDeliveryStore((state) => state.isOnline);
   useEffect(() => {
-    if (isOnline) startOnlineLocationUpdates();
-    else stopOnlineLocationUpdates();
+    if (!isOnline) {
+      stopOnlineLocationUpdates();
+      return;
+    }
+    // Online from the last session, but location was turned off in the settings since: back to Offline, so the toggle
+    // does not show Online while no location (and no orders) can come in.
+    startOnlineLocationUpdates().then(async (started) => {
+      if (started || (await hasLocationPermission())) return;
+      if (!useDeliveryStore.getState().isOnline) return;
+      useDeliveryStore.getState().setOnline(false);
+      deliveryAPI.updateOnlineStatus(false).catch(() => {});
+    });
   }, [isOnline]);
   // signing out unmounts the shell: the service stops with it
   useEffect(() => () => {

@@ -86,6 +86,34 @@ TaskManager.defineTask(RIDER_LOCATION_TASK, async ({ data, error }) => {
 });
 
 /**
+ * Run before going Online: shows the location explanation and Android's prompt when needed.
+ * Resolves 'granted', 'declined' ("Not now" on the explanation or "Don't allow" on Android's prompt) or
+ * 'blocked' (Android no longer shows its prompt: the permission can only be given in the app settings).
+ */
+export async function ensureOnlineLocationPermission() {
+  try {
+    const fg = await Location.getForegroundPermissionsAsync();
+    if (fg.granted) return 'granted';
+    if (!fg.canAskAgain) return 'blocked';
+    if (!(await requestLocationDisclosure())) return 'declined';
+    const asked = await Location.requestForegroundPermissionsAsync();
+    if (asked.granted) return 'granted';
+    return asked.canAskAgain ? 'declined' : 'blocked';
+  } catch {
+    return 'declined';
+  }
+}
+
+/** Whether the app may read the location now (no prompt). */
+export async function hasLocationPermission() {
+  try {
+    return (await Location.getForegroundPermissionsAsync()).granted;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Starts the background location service (asks for location permission first; "Allow all the time" is asked for too,
  * but the service also works with "While using the app" because it runs as a foreground service).
  * Returns false when location permission was refused.

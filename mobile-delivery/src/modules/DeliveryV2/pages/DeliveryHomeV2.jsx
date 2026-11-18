@@ -30,7 +30,7 @@ import {
 import apiClient from '@food/api/axios';
 import { useNavigate } from '@/lib/router';
 import { toast } from '@/lib/toast';
-import { setRiderBackgroundHandler } from '@/lib/riderLocation';
+import { ensureOnlineLocationPermission, setRiderBackgroundHandler } from '@/lib/riderLocation';
 import { AppImage, Sheet, Text, useBottomNavSpace } from '@/native/ui';
 import { StatusBar } from '@/native/ui/SectionStatusBar';
 import { alpha, colors, deliveryTheme, fonts } from '@/theme';
@@ -884,8 +884,33 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     }
   };
 
-  const handleToggleOnline = () => {
+  const togglingOnlineRef = useRef(false);
+  const handleToggleOnline = async () => {
     const nextState = !isOnline;
+    if (nextState) {
+      // Going Online needs location: the explanation + Android's prompt come first, and without permission the rider
+      // stays Offline with a message (otherwise the toggle showed Online while no location and no orders came in).
+      if (togglingOnlineRef.current) return;
+      togglingOnlineRef.current = true;
+      let permission;
+      try {
+        permission = await ensureOnlineLocationPermission();
+      } finally {
+        togglingOnlineRef.current = false;
+      }
+      if (permission !== 'granted') {
+        const blocked = permission === 'blocked';
+        toast.error('Location permission is required to go Online', {
+          id: 'online-location-permission',
+          description: blocked
+            ? 'Allow location for Foodie Delivery Partner in the app settings.'
+            : 'We need your location to send you nearby orders.',
+          action: blocked ? { label: 'Open settings', onClick: () => Linking.openSettings().catch(() => {}) } : undefined,
+          duration: blocked ? 7000 : 4000,
+        });
+        return;
+      }
+    }
     toggleOnline(); // Store action
     if (nextState) {
       // Try to get location and sync immediately so we are visible for dispatch right away

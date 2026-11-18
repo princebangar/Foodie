@@ -99,7 +99,8 @@ export function LocationDisclosureHost() {
 
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: dv.surface, paddingHorizontal: 24 },
-  scroll: { paddingBottom: 16 },
+  // centred on tall screens (no empty gap above the buttons); scrolls on small ones
+  scroll: { flexGrow: 1, justifyContent: 'center', paddingBottom: 16 },
   iconWrap: {
     width: 80,
     height: 80,
