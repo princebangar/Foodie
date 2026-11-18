@@ -12,6 +12,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as Network from 'expo-network';
 import { ENV } from '../config/env';
 import { localStorageShim, sessionStorageShim } from './storage';
+import { requestLocationDisclosure } from './locationDisclosure';
 
 const g = globalThis;
 
@@ -303,6 +304,8 @@ const ensurePermission = async () => {
   const current = await Location.getForegroundPermissionsAsync();
   if (current.granted) return true;
   if (!current.canAskAgain) return false;
+  // Play prominent disclosure: explain location use before Android's prompt
+  if (!(await requestLocationDisclosure({ passive: true }))) return false;
   const asked = await Location.requestForegroundPermissionsAsync();
   return asked.granted;
 };

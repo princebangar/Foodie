@@ -13,9 +13,9 @@ import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import * as Battery from 'expo-battery';
 import * as IntentLauncher from 'expo-intent-launcher';
-import * as Application from 'expo-application';
 import { Alert, AppState, Linking, Platform } from 'react-native';
 import { hydrateStorage } from './storage';
+import { requestLocationDisclosure } from './locationDisclosure';
 
 export const RIDER_LOCATION_TASK = 'foodie-delivery-online-location';
 
@@ -94,11 +94,14 @@ export async function startOnlineLocationUpdates() {
   try {
     const fg = await Location.getForegroundPermissionsAsync();
     let granted = fg.granted;
-    if (!granted && fg.canAskAgain) granted = (await Location.requestForegroundPermissionsAsync()).granted;
+    // Play prominent disclosure: the rider sees why location (also in the background) is needed before Android asks
+    if (!granted && fg.canAskAgain && (await requestLocationDisclosure())) {
+      granted = (await Location.requestForegroundPermissionsAsync()).granted;
+    }
     if (!granted) return false;
     try {
       const bg = await Location.getBackgroundPermissionsAsync();
-      if (!bg.granted && bg.canAskAgain) await Location.requestBackgroundPermissionsAsync();
+      if (!bg.granted && bg.canAskAgain && (await requestLocationDisclosure())) await Location.requestBackgroundPermissionsAsync();
     } catch {
       // older Android / refused: the foreground service still runs
     }
@@ -139,16 +142,17 @@ async function askToRunInBackground() {
     if (Date.now() - last < 24 * 60 * 60 * 1000) return;
     Alert.alert(
       'Keep getting orders with the screen off',
-      'Allow Foodie Delivery Partner to run in the background so your location and new orders keep coming while the phone is locked.\n\nOn Xiaomi / Redmi / POCO phones also set Battery saver to "No restrictions" and turn on Autostart in the app settings.',
+      'In Battery settings choose "All apps", open Foodie Delivery Partner and select "Don\'t optimise", so your location and new orders keep coming while the phone is locked.\n\nOn Xiaomi / Redmi / POCO phones set Battery saver to "No restrictions" and turn on Autostart in the app settings.',
       [
         { text: 'Not now', style: 'cancel', onPress: () => localStorage.setItem(BATTERY_ASKED_KEY, String(Date.now())) },
         { text: 'App settings', onPress: () => Linking.openSettings().catch(() => {}) },
         {
-          text: 'Allow',
+          // the system's battery optimisation list: needs no REQUEST_IGNORE_BATTERY_OPTIMIZATIONS permission (Play restricts it)
+          text: 'Battery settings',
           onPress: () =>
-            IntentLauncher.startActivityAsync(IntentLauncher.ActivityAction.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, {
-              data: `package:${Application.applicationId}`,
-            }).catch(() => Linking.openSettings().catch(() => {})),
+            IntentLauncher.startActivityAsync(IntentLauncher.ActivityAction.IGNORE_BATTERY_OPTIMIZATION_SETTINGS).catch(() =>
+              Linking.openSettings().catch(() => {}),
+            ),
         },
       ],
     );

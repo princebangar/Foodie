@@ -96,8 +96,10 @@ export const legalHtmlToPlainText = (html) => {
   text = text.replace(/<p[^>]*>/gi, "").replace(/<\/p>/gi, "\n");
   text = text.replace(/<br\s*\/?>/gi, "\n");
   text = text.replace(/<div[^>]*>/gi, "").replace(/<\/div>/gi, "\n");
+  // Keep headings and bold as their editor markers, so opening and saving a page does not flatten its formatting.
   text = text.replace(/<\/(h1|h2|h3)>/gi, "\n");
-  text = text.replace(/<(h1|h2|h3)[^>]*>/gi, "");
+  text = text.replace(/<h1[^>]*>/gi, "# ").replace(/<h2[^>]*>/gi, "## ").replace(/<h3[^>]*>/gi, "### ");
+  text = text.replace(/<\/?(strong|b)(\s[^>]*)?>/gi, "**");
   text = text.replace(/<\/li>/gi, "\n");
   text = text.replace(/<li[^>]*>/gi, "- ");
   text = text.replace(/<\/ul>/gi, "\n").replace(/<ul[^>]*>/gi, "");

@@ -14,6 +14,7 @@ import { routeFromNotification } from '@/lib/push';
 import { ThemeProvider, deliveryTheme } from '@/theme';
 import { FontScope, Toaster } from '@/native/ui';
 import { PaymentHost } from '@/native/PaymentHost';
+import { LocationDisclosureHost } from '@/native/LocationDisclosureHost';
 import { AnimatedSplash, SPLASH_BG } from '@/native/AnimatedSplash';
 import { markSplashDone } from '@/native/splashState';
 import { preloadLoginImages } from '@/modules/auth/components/LoginImageSlider';
@@ -86,6 +87,7 @@ export default function RootLayout() {
               <MaintenanceGate />
               <NavBarScrim />
               <PaymentHost />
+              <LocationDisclosureHost />
               <Toaster />
             </FontScope>
           </ThemeProvider>

@@ -1,0 +1,9 @@
+# Built app files (APK / AAB) are large binaries: keep them on disk, out of git.
+releases/
+*.apk
+*.aab
+
+# Signing keys must never be committed.
+*.jks
+*.keystore
+!**/debug.keystore
