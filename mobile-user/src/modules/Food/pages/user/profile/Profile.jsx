@@ -33,7 +33,9 @@ import { Link, useLocation, useNavigate } from "@/lib/router"
 import { toast } from "@/lib/toast"
 import { AppImage, Dialog, Skeleton, Text } from "@/native/ui"
 import { THEME_CHANGE_EVENT, USER_THEME_KEY, alpha, colors, makeStyles, shadow, useTheme } from "@/theme"
-import { DIAMOND_BG, DIAMOND_FONT, DiamondGem, DiamondMetalText, DiamondPattern } from "@food/components/user/diamond/DiamondBrand"
+import { StatusBarScrim } from "@/native/ui/StatusBarScrim"
+import { StatusBar } from "@/native/ui/SectionStatusBar"
+import { DIAMOND_BG, DIAMOND_FONT, DiamondGem, DiamondPattern } from "@food/components/user/diamond/DiamondBrand"
 import { fetchDiamond, getCachedDiamond, preloadDiamondPage } from "@food/components/user/diamond/diamondCache"
 import { normalizeImageUrl } from "@food/utils/common"
 import AnimatedPage from "@food/components/user/AnimatedPage"
@@ -141,7 +143,13 @@ function PopupModal({ open, onClose, children, backdrop = 0.6 }) {
   )
 }
 
-export default function Profile() {
+export default function Profile({ isTabActive = true }) {
+  // Profile opens at its top every time (Prince, 18 Nov): it stays mounted as a tab, so scrolled to the bottom and
+  // back from another tab it was still at the bottom. Reset while it is hidden, so nothing jumps on screen.
+  const scrollRef = useRef(null)
+  useEffect(() => {
+    if (!isTabActive) scrollRef.current?.scrollTo?.({ y: 0, animated: false })
+  }, [isTabActive])
   const { userProfile, vegMode, setVegMode, vegModeOption, setVegModeOption, getDefaultAddress, addresses } = useProfile()
   const { openLocationSelector } = useLocationSelector()
   const navigate = useNavigate()
@@ -298,7 +306,7 @@ export default function Profile() {
 
   return (
     <AnimatedPage style={s.page}>
-      <ScrollView contentContainerStyle={[s.content, { paddingTop: insets.top + 16, paddingBottom: 80 + insets.bottom }]} showsVerticalScrollIndicator={false}>
+      <ScrollView ref={scrollRef} contentContainerStyle={[s.content, { paddingTop: insets.top + 16, paddingBottom: 80 + insets.bottom }]} showsVerticalScrollIndicator={false}>
         {/* Header: Back Arrow */}
         <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 20 }}>
           <Pressable
@@ -312,7 +320,7 @@ export default function Profile() {
         </View>
 
         {/* Profile Info Card */}
-        <View style={[s.profileCard, diamondCard ? { backgroundColor: DIAMOND_BG } : null, isDiamondMember && s.diamondShadow]}>
+        <View style={[s.profileCard, diamondCard ? s.diamondCard : null, isDiamondMember && s.diamondShadow]}>
           {diamondCard && <DiamondPattern corner />}
           <View style={[{ padding: 16, paddingVertical: 9 }, diamondCard && { paddingTop: 20, paddingBottom: 20 }]}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
@@ -338,7 +346,8 @@ export default function Profile() {
                 <DiamondGem size={20} id="profile-gem" />
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <DiamondMetalText style={{ fontSize: 19, fontWeight: "600", fontFamily: DIAMOND_FONT }}>Diamond Member</DiamondMetalText>
+                {/* one solid ice colour: the metal gradient's darker middle band read as a line through the words (Prince, 18 Nov) */}
+                <Text style={{ fontSize: 19, lineHeight: 24, fontWeight: "600", fontFamily: DIAMOND_FONT, color: "#BDEFFF" }}>Diamond Member</Text>
               </View>
               <ChevronRight size={20} color={colors.gray[300]} />
             </Link>
@@ -483,7 +492,6 @@ export default function Profile() {
       {/* Logout Confirmation Popup */}
       <PopupModal open={logoutConfirmOpen} onClose={() => setLogoutConfirmOpen(false)}>
         <View style={s.logoutCard}>
-          <BlurView intensity={30} tint={t.dark ? "dark" : "light"} style={StyleSheet.absoluteFill} />
           <View style={{ alignItems: "center", marginBottom: 16 }}>
             <View style={s.logoutIcon}>
               <Power size={28} color="#FF3131" />
@@ -522,7 +530,7 @@ export default function Profile() {
             activeBg={t.dark ? alpha("#7F1D1D", 0.2) : "#fdfafc"}
             onPress={() => {
               setAppearanceOpen(false)
-              setTimeout(() => setAppearance("light"), 250)
+              setAppearance("light") // at once (a 250 ms wait was part of the ~1 s delay, 18 Nov)
             }}
           >
             <Sun size={20} color={t.dark ? colors.yellow[400] : colors.yellow[500]} />
@@ -537,7 +545,7 @@ export default function Profile() {
             activeBg={t.dark ? alpha("#7F1D1D", 0.2) : "#fdfafc"}
             onPress={() => {
               setAppearanceOpen(false)
-              setTimeout(() => setAppearance("dark"), 250)
+              setAppearance("dark") // at once (a 250 ms wait was part of the ~1 s delay, 18 Nov)
             }}
           >
             <Moon size={20} color={t.dark ? colors.gray[300] : colors.gray[600]} />
@@ -592,6 +600,10 @@ export default function Profile() {
         captcha={deleteCaptcha}
         onCaptchaChange={setDeleteCaptcha}
       />
+      {/* the page scrolled under the status bar icons (Prince, 18 Nov) */}
+      <StatusBarScrim color={t.dark ? "#0a0a0a" : "#f5f5f5"} />
+      {/* dark icons on the light page (Home's light icons stayed and were hardly visible here) */}
+      {isTabActive && <StatusBar style={t.dark ? "light" : "dark"} />}
     </AnimatedPage>
   )
 }
@@ -611,8 +623,10 @@ const useStyles = makeStyles(({ dark }) => ({
     borderColor: dark ? alpha("#ffffff", 0.1) : alpha("#000000", 0.1),
     ...shadow.sm,
   },
-  profileCard: { borderRadius: 20, overflow: "hidden", backgroundColor: dark ? "#1a1a1a" : colors.white, ...shadow.sm },
-  diamondShadow: { elevation: 10, shadowColor: "#0B0E13", shadowOpacity: 0.25, shadowRadius: 24, shadowOffset: { width: 0, height: 8 } },
+  // dark mode: a light edge, the card was lost on the black page (Prince, 18 Nov)
+  profileCard: { borderRadius: 20, overflow: "hidden", backgroundColor: dark ? "#1a1a1a" : colors.white, borderWidth: dark ? 1 : 0, borderColor: alpha("#ffffff", 0.1), ...shadow.sm },
+  diamondCard: { backgroundColor: DIAMOND_BG, borderWidth: 1, borderColor: alpha("#9EE6FF", dark ? 0.35 : 0.25) },
+  diamondShadow: { elevation: 10, shadowColor: "#1B2838", shadowOpacity: 0.25, shadowRadius: 24, shadowOffset: { width: 0, height: 8 } },
   avatar: { height: 64, width: 64, borderRadius: 9999, overflow: "hidden" },
   name: { fontSize: 19, lineHeight: 24, fontWeight: "700", textTransform: "capitalize", color: dark ? colors.white : colors.gray[900] },
   contact: { fontSize: 13, lineHeight: 18, marginTop: 2, color: dark ? colors.gray[400] : colors.gray[500] },
@@ -646,16 +660,27 @@ const useStyles = makeStyles(({ dark }) => ({
   radio: { width: 20, height: 20, borderRadius: 9999, borderWidth: 2, alignItems: "center", justifyContent: "center" },
   choiceTitle: { fontSize: 14, lineHeight: 20, fontWeight: "500", color: dark ? colors.white : colors.gray[900] },
   choiceSub: { fontSize: 12, lineHeight: 16, color: dark ? colors.gray[400] : colors.gray[500] },
+  // Prince (18 Nov): the card was 75 % see-through with a blur that Android does not draw - the dark backdrop showed
+  // through and it looked washed out. Solid card now; the power icon sits in a soft red badge with a ring.
   logoutCard: {
-    borderRadius: 16,
-    overflow: "hidden",
-    backgroundColor: dark ? alpha("#1a1a1a", 0.75) : alpha("#ffffff", 0.75),
+    borderRadius: 20,
+    backgroundColor: dark ? "#1a1a1a" : colors.white,
     borderWidth: 1,
-    borderColor: dark ? alpha("#ffffff", 0.1) : alpha("#ffffff", 0.2),
+    borderColor: dark ? alpha("#ffffff", 0.08) : colors.gray[100],
     padding: 24,
     ...shadow["2xl"],
   },
-  logoutIcon: { width: 56, height: 56, borderRadius: 9999, backgroundColor: dark ? alpha("#450a0a", 0.3) : colors.red[50], alignItems: "center", justifyContent: "center", marginBottom: 12 },
+  logoutIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 9999,
+    backgroundColor: dark ? "#3B1414" : "#FFF1F1",
+    borderWidth: 6,
+    borderColor: dark ? "#2A1010" : "#FFF8F8",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 14,
+  },
   popupTitle: { fontSize: 20, lineHeight: 28, fontWeight: "700", color: dark ? colors.white : colors.gray[900], textAlign: "center" },
   popupText: { fontSize: 14, lineHeight: 22.75, color: dark ? colors.gray[400] : colors.gray[500], marginBottom: 24, textAlign: "center" },
   noBtn: { flex: 1, height: 48, borderRadius: 12, borderWidth: 1, borderColor: dark ? colors.gray[800] : colors.gray[200], backgroundColor: dark ? "#262626" : colors.white, alignItems: "center", justifyContent: "center" },

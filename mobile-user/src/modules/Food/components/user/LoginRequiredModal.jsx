@@ -1,34 +1,16 @@
-// Web: modules/Food/components/user/LoginRequiredModal.jsx — the guest "LOGIN REQUIRED" popup (opened by the
-// 'show-login-required' window event in UserLayout). Same texts, colours (light and dark), Warli border and navigation.
+// Web: modules/Food/components/user/LoginRequiredModal.jsx — the guest "login required" popup (opened by the
+// 'show-login-required' window event in UserLayout). Same purpose, texts and navigation as the web.
+// Prince (18 Nov): redesigned for the app - the web card (cream, serif uppercase title, a logout/exit icon in a beige
+// box, a Warli strip under the button) looked off and too tall on the phone. Now a solid card, a login icon in a soft
+// red badge, a plain bold title, the red LOGIN / SIGN UP button and a "Not now" text button.
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Modal, Pressable, StyleSheet, View } from 'react-native';
-import { BlurView } from 'expo-blur';
-import Svg, { Circle, G, Path } from 'react-native-svg';
-import { LogOut, X } from 'lucide-react-native';
+import { Animated, Easing, Modal, Pressable, StyleSheet, View } from 'react-native';
+import { LogIn, X } from 'lucide-react-native';
 import { useNavigate } from '@/lib/router';
 import { Text } from '@/native/ui';
 import { alpha, useTheme } from '@/theme';
 
-// Chain of traditional Warli figures holding hands (web: svg 100% x 45, viewBox 0 0 350 45, opacity .12 / dark .20)
-function WarliBorder({ dark }) {
-  return (
-    <Svg width="100%" height={45} viewBox="0 0 350 45" preserveAspectRatio="none" style={{ opacity: dark ? 0.2 : 0.12 }}>
-      {Array.from({ length: 9 }).map((_, index) => {
-        const x = 25 + index * 37;
-        return (
-          <G key={index} stroke="#DC2626" strokeWidth={2} fill="none" strokeLinecap="round" strokeLinejoin="round">
-            <Circle cx={x} cy={11} r={3.5} fill="#DC2626" />
-            <Path d={`M ${x - 5} 17 L ${x + 5} 17 L ${x} 23 Z`} fill="#DC2626" />
-            <Path d={`M ${x - 5} 29 L ${x + 5} 29 L ${x} 23 Z`} fill="#DC2626" />
-            {index > 0 ? <Path d={`M ${x - 5} 19 Q ${x - 18.5} 13 ${x - 32} 19`} /> : null}
-            <Path d={`M ${x - 2} 29 L ${x - 5} 37`} />
-            <Path d={`M ${x + 2} 29 L ${x + 5} 37`} />
-          </G>
-        );
-      })}
-    </Svg>
-  );
-}
+const RED = '#DC2626'; // Home's BRAND_RED
 
 export default function LoginRequiredModal({ isOpen, onClose }) {
   const navigate = useNavigate();
@@ -37,10 +19,14 @@ export default function LoginRequiredModal({ isOpen, onClose }) {
   const [mounted, setMounted] = useState(isOpen);
   const anim = useRef(new Animated.Value(isOpen ? 1 : 0)).current;
 
-  // Prevent background scroll when modal is open
   useEffect(() => {
     if (isOpen) setMounted(true);
-    Animated.timing(anim, { toValue: isOpen ? 1 : 0, duration: 200, useNativeDriver: true }).start(({ finished }) => {
+    Animated.timing(anim, {
+      toValue: isOpen ? 1 : 0,
+      duration: isOpen ? 200 : 150,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
+    }).start(({ finished }) => {
       if (finished && !isOpen) setMounted(false);
     });
   }, [isOpen, anim]);
@@ -48,56 +34,57 @@ export default function LoginRequiredModal({ isOpen, onClose }) {
   if (!isOpen && !mounted) return null;
 
   const handleLoginClick = () => {
-    // Navigate directly to the user login page to trigger instant transition
+    onClose?.();
     navigate('/user/auth/login');
   };
 
-  const border = d ? '#382D24' : '#EBE1CD';
+  const cardBg = d ? '#1A1A1A' : '#FFFFFF';
+  const titleColor = d ? '#F5F5F5' : '#1C1C1C';
+  const textColor = d ? '#A3A3A3' : '#6B7280';
 
   return (
     <Modal visible transparent statusBarTranslucent navigationBarTranslucent animationType="none" onRequestClose={() => onClose?.()}>
       <View style={styles.root}>
         <Animated.View style={[StyleSheet.absoluteFill, { opacity: anim }]}>
-          <BlurView intensity={8} tint="dark" style={StyleSheet.absoluteFill} />
-          <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: alpha('#000000', 0.6) }]} onPress={onClose} />
+          <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: alpha('#000000', 0.55) }]} onPress={onClose} />
         </Animated.View>
 
         <Animated.View
           style={[
             styles.card,
-            { backgroundColor: d ? '#1C1613' : '#FCF9F2', borderColor: border },
-            { opacity: anim, transform: [{ scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1] }) }] },
+            { backgroundColor: cardBg, borderColor: d ? alpha('#FFFFFF', 0.08) : '#F1F1F1' },
+            {
+              opacity: anim,
+              transform: [{ scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1] }) }],
+            },
           ]}
         >
           <Pressable
             onPress={onClose}
-            accessibilityLabel="Close modal"
-            hitSlop={6}
-            style={({ pressed }) => [styles.close, pressed && { backgroundColor: alpha(border, 0.4) }]}
+            accessibilityLabel="Close"
+            hitSlop={10}
+            style={({ pressed }) => [styles.close, { backgroundColor: d ? '#262626' : '#F4F4F5' }, pressed && { opacity: 0.7 }]}
           >
-            <X size={20} color={d ? '#EAE0D5' : '#DC2626'} />
+            <X size={16} color={d ? '#D4D4D4' : '#52525B'} />
           </Pressable>
 
-          <View pointerEvents="none" style={styles.topLine} />
-
-          <View style={[styles.iconBox, { backgroundColor: alpha(border, 0.3), borderColor: border }]}>
-            <LogOut size={28} color={d ? '#E8AF9D' : '#DC2626'} />
+          <View style={[styles.badge, { backgroundColor: d ? '#3B1418' : '#FEF2F2', borderColor: d ? '#2A0F12' : '#FFF7F8' }]}>
+            <LogIn size={28} color={RED} strokeWidth={2.2} />
           </View>
 
-          <Text style={[styles.title, { color: d ? '#F3D7C9' : '#DC2626' }]}>LOGIN REQUIRED</Text>
-
-          <Text style={[styles.caption, { color: d ? '#C5B39E' : '#615446' }]}>Please login to continue your delicious journey</Text>
+          <Text style={[styles.title, { color: titleColor }]}>Login required</Text>
+          <Text style={[styles.caption, { color: textColor }]}>Please login to continue your delicious journey</Text>
 
           <Pressable
             onPress={handleLoginClick}
-            style={({ pressed }) => [styles.loginBtn, pressed && { backgroundColor: '#991B1B', transform: [{ scale: 0.98 }] }]}
+            style={({ pressed }) => [styles.loginBtn, pressed && { backgroundColor: '#B91C1C', transform: [{ scale: 0.98 }] }]}
           >
             <Text style={styles.loginText}>LOGIN / SIGN UP</Text>
           </Pressable>
 
-          <View pointerEvents="none" style={{ width: '100%', marginTop: 8 }}>
-            <WarliBorder dark={d} />
-          </View>
+          <Pressable onPress={onClose} hitSlop={8} style={({ pressed }) => [styles.laterBtn, pressed && { opacity: 0.6 }]}>
+            <Text style={[styles.laterText, { color: textColor }]}>Not now</Text>
+          </Pressable>
         </Animated.View>
       </View>
     </Modal>
@@ -105,54 +92,58 @@ export default function LoginRequiredModal({ isOpen, onClose }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 16 },
+  root: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   card: {
     width: '100%',
-    maxWidth: 380,
-    borderRadius: 16,
+    maxWidth: 360,
+    borderRadius: 24,
     borderWidth: 1,
-    overflow: 'hidden',
     alignItems: 'center',
-    padding: 24,
+    paddingTop: 28,
+    paddingHorizontal: 24,
+    paddingBottom: 14,
     shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 25,
-    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.25,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 12 },
     elevation: 16,
   },
-  close: { position: 'absolute', top: 16, right: 16, padding: 6, borderRadius: 9999, zIndex: 2 },
-  topLine: { position: 'absolute', top: 0, left: 0, right: 0, height: 2, backgroundColor: '#DC2626', opacity: 0.3 },
-  iconBox: {
-    marginTop: 24,
-    marginBottom: 20,
+  close: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    width: 32,
+    height: 32,
+    borderRadius: 9999,
     alignItems: 'center',
     justifyContent: 'center',
-    width: 64,
-    height: 64,
-    borderRadius: 16,
-    borderWidth: 1,
-    elevation: 1,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    shadowOffset: { width: 0, height: 1 },
+    zIndex: 2,
   },
-  // text-xl font-black tracking-wider uppercase font-serif
-  title: { fontSize: 20, lineHeight: 28, fontWeight: '900', letterSpacing: 1, marginBottom: 12, fontFamily: 'serif', textAlign: 'center' },
-  caption: { fontSize: 14, lineHeight: 22.75, fontWeight: '500', maxWidth: 280, marginBottom: 24, textAlign: 'center' },
+  badge: {
+    width: 72,
+    height: 72,
+    borderRadius: 9999,
+    borderWidth: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  title: { fontSize: 20, lineHeight: 28, fontWeight: '700', textAlign: 'center', marginBottom: 6 },
+  caption: { fontSize: 14, lineHeight: 21, fontWeight: '400', textAlign: 'center', maxWidth: 270, marginBottom: 22 },
   loginBtn: {
     width: '100%',
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 9999,
-    backgroundColor: '#DC2626',
+    height: 50,
+    borderRadius: 14,
+    backgroundColor: RED,
     alignItems: 'center',
-    marginBottom: 24,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
+    justifyContent: 'center',
+    elevation: 3,
+    shadowColor: RED,
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
   },
-  loginText: { color: '#ffffff', fontWeight: '700', letterSpacing: 1.4, fontSize: 14, lineHeight: 20 },
+  loginText: { color: '#FFFFFF', fontWeight: '700', letterSpacing: 0.8, fontSize: 15, lineHeight: 20 },
+  laterBtn: { marginTop: 6, paddingVertical: 10, paddingHorizontal: 16 },
+  laterText: { fontSize: 14, lineHeight: 20, fontWeight: '600' },
 });

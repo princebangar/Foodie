@@ -107,10 +107,20 @@ export function RouteScope({ prefix, children }) {
 
 // A kept-alive tab layer that stays on screen for a moment while a page opens on top of it is frozen the same way:
 // its screens keep the location they were drawn for instead of reacting to the new page's URL.
-const FrozenLocationContext = createContext(false);
+// The context value is a STABLE object read at snapshot time, not the boolean itself: with the boolean, every freeze /
+// unfreeze changed the context and re-rendered every page under it - opening a restaurant re-rendered both Home tabs,
+// Dining, Under 250 and Profile at once, and every tab switch re-rendered the tab being left (18 Nov, 200-440 ms per
+// tap on the phone). A screen that is unfrozen picks up the current location on its next render.
+const FrozenLocationContext = createContext(null);
+const isFrozenNow = (ctx) => Boolean(ctx?.isFrozen());
 
+// Nested freezes add up: a hidden tab pane inside a tab layer that is frozen stays frozen.
 export function FreezeLocation({ frozen, children }) {
-  return <FrozenLocationContext.Provider value={Boolean(frozen)}>{children}</FrozenLocationContext.Provider>;
+  const parent = useContext(FrozenLocationContext);
+  const frozenRef = useRef(Boolean(frozen));
+  frozenRef.current = Boolean(frozen);
+  const value = useMemo(() => ({ isFrozen: () => frozenRef.current || isFrozenNow(parent) }), [parent]);
+  return <FrozenLocationContext.Provider value={value}>{children}</FrozenLocationContext.Provider>;
 }
 
 const inScope = (pathname, prefix) => !prefix || pathname === prefix || pathname.startsWith(`${prefix}/`);
@@ -135,7 +145,7 @@ const subscribeRoute = (fn) => {
  */
 export function useLocationNow() {
   const scope = useContext(RouteScopeContext);
-  const frozen = useContext(FrozenLocationContext);
+  const frozenCtx = useContext(FrozenLocationContext);
   const lastInScopeRef = useRef(null);
   const pathname = usePathname();
   const params = useGlobalSearchParams();
@@ -151,18 +161,18 @@ export function useLocationNow() {
     }),
     [pathname, search, stateId],
   );
-  if (frozen && lastInScopeRef.current) return lastInScopeRef.current;
+  if (isFrozenNow(frozenCtx) && lastInScopeRef.current) return lastInScopeRef.current;
   if (inScope(pathname, scope) || !lastInScopeRef.current) lastInScopeRef.current = location;
   return lastInScopeRef.current;
 }
 
 export function useLocation() {
   const scope = useContext(RouteScopeContext);
-  const frozen = useContext(FrozenLocationContext);
+  const frozenCtx = useContext(FrozenLocationContext);
   const lastInScopeRef = useRef(null);
   const getSnapshot = () => {
     const location = routeStore.location;
-    if (frozen && lastInScopeRef.current) return lastInScopeRef.current;
+    if (isFrozenNow(frozenCtx) && lastInScopeRef.current) return lastInScopeRef.current;
     if (inScope(location.pathname, scope) || !lastInScopeRef.current) lastInScopeRef.current = location;
     return lastInScopeRef.current;
   };
@@ -182,10 +192,12 @@ export function useParams() {
   }, [params]);
 }
 
+// Built on useLocation (not Expo Router's global params): a screen that is frozen or out of its scope is not
+// re-rendered by every navigation. With the router hooks here, both kept-alive Home tabs (4300 lines each) re-rendered
+// on every tap anywhere in the app, also while hidden - the main reason the user app felt slow (18 Nov).
 export function useSearchParams() {
-  const pathname = usePathname();
-  const params = useGlobalSearchParams();
-  const search = toQueryString(params);
+  const location = useLocation();
+  const { pathname, search } = location;
   const searchParams = useMemo(() => new URLSearchParams(search), [search]);
   const setSearchParams = useCallback(
     (next, options = {}) => {
@@ -198,7 +210,7 @@ export function useSearchParams() {
       // (keyboard opening / closing, then "Maximum update depth exceeded").
       if (!options.state) {
         const nextParams = Object.fromEntries(usp.entries());
-        Object.keys(params || {}).forEach((k) => {
+        new URLSearchParams(search).forEach((_, k) => {
           if (k !== STATE_PARAM && !(k in nextParams)) nextParams[k] = undefined;
         });
         router.setParams(nextParams);
@@ -206,7 +218,7 @@ export function useSearchParams() {
       }
       navigateTo(`${pathname}${q ? `?${q}` : ''}`, { replace: options.replace !== false, state: options.state });
     },
-    [pathname, search, params],
+    [pathname, search],
   );
   return [searchParams, setSearchParams];
 }

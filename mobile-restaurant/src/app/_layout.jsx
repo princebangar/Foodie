@@ -23,6 +23,9 @@ import ConnectionStatus from '@/appstore/ConnectionStatus';
 import MaintenanceGate from '@/appstore/MaintenanceGate';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
+// Android fades the native splash out over 400 ms by default: the animated splash had to wait for it (or both wordmarks
+// showed at once). Its first frame is the same picture, so a short fade is enough (18 Nov).
+SplashScreen.setOptions({ duration: 150 });
 
 function useNotificationRouting(ready) {
   const last = Notifications.useLastNotificationResponse();

@@ -55,6 +55,22 @@ function PulseDot({ style }) {
   return <Animated.View style={[style, { opacity }]} />;
 }
 
+/** Grey block pulsing like the web's animate-pulse, where the banner image will be. */
+function BannerSkeleton({ style, dark }) {
+  const opacity = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.55, duration: 700, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1, duration: 700, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [opacity]);
+  return <Animated.View style={[style, { opacity, backgroundColor: dark ? colors.gray[800] : colors.gray[200] }]} />;
+}
+
 export default function Gourmet() {
   const navigate = useNavigate();
   const goBack = useAppBackNavigation();
@@ -71,13 +87,9 @@ export default function Gourmet() {
   const { vegMode, vegModeOption } = useProfile();
   const showGourmetSkeleton = useDelayedLoading(loading);
 
-  // banner image: animate-in fade-in zoom-in duration-1000 (opacity 0 -> 1, scale 0 -> 1)
-  const bannerAnim = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    const a = Animated.timing(bannerAnim, { toValue: 1, duration: 1000, easing: Easing.ease, useNativeDriver: true });
-    a.start();
-    return () => a.stop();
-  }, [bannerAnim]);
+  // Banner image (Prince, 18 Nov): the web's 1 s "zoom-in" (scale 0 -> 1) made it grow out of the middle every time the
+  // page opened. It now stays put: a pulsing skeleton until the image has loaded, then a short fade.
+  const [bannerLoaded, setBannerLoaded] = useState(false);
 
   const visibleGourmetRestaurants = useMemo(() => {
     let list = gourmetRestaurants;
@@ -204,7 +216,7 @@ export default function Gourmet() {
                   onPress={() => toggleFavorite(restaurantId)}
                   style={({ pressed: p }) => [s.bookmarkBtn, p && { transform: [{ scale: 0.9 }] }]}
                 >
-                  <BlurView intensity={20} tint="light" style={s.absFill} />
+                  <BlurView intensity={20} tint="dark" style={s.absFill} />
                   <Bookmark
                     size={20}
                     color={isFavorite ? colors.white : alpha(colors.white, 0.8)}
@@ -266,9 +278,8 @@ export default function Gourmet() {
       <View style={[s.banner, { height: height * 0.3 }]}>
         {/* Banner Image */}
         <View style={[s.absFill, { transform: [{ scale: 1.05 }] }]}>
-          <Animated.View style={[s.absFill, { opacity: bannerAnim, transform: [{ scale: bannerAnim }] }]}>
-            <AppImage src={gourmetBanner} style={s.fill} contentFit="cover" />
-          </Animated.View>
+          {!bannerLoaded && <BannerSkeleton style={s.absFill} dark={t.dark} />}
+          <AppImage src={gourmetBanner} style={s.fill} contentFit="cover" transition={200} onLoad={() => setBannerLoaded(true)} />
           <LinearGradient
             colors={[alpha(colors.black, 0.8), alpha(colors.black, 0.4), "transparent"]}
             start={{ x: 0, y: 1 }}
@@ -403,15 +414,19 @@ const useStyles = makeStyles((t) => ({
     ...shadow.xs,
   },
   retryText: { ...fontSize.sm, fontWeight: "500", color: t.dark ? "#171717" : brand.primaryForeground },
+  // Prince (18 Nov): white cards with a 20 % grey shadow had no visible edge on the white page - now like the Home
+  // restaurant cards (light border + normal shadow, same corner radius)
   card: {
     marginHorizontal: sp(4),
     overflow: "hidden",
     backgroundColor: t.dark ? "#1a1a1a" : colors.white,
-    borderRadius: 32,
-    marginBottom: sp(4) + sp(4),
-    ...(t.dark ? shadow.none : { ...shadow.xl, shadowColor: colors.gray[200], shadowOpacity: 0.2 }),
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: t.dark ? alpha(colors.gray[800], 0.8) : alpha(colors.gray[200], 0.9),
+    marginBottom: sp(5),
+    ...shadow.md,
   },
-  imageWrap: { position: "relative", height: 192, width: "100%", overflow: "hidden", borderTopLeftRadius: 32, borderTopRightRadius: 32 },
+  imageWrap: { position: "relative", height: 192, width: "100%", overflow: "hidden", borderTopLeftRadius: 20, borderTopRightRadius: 20 },
   noImage: { width: "100%", height: "100%", backgroundColor: t.dark ? colors.zinc[800] : colors.gray[100], alignItems: "center", justifyContent: "center" },
   bookmarkWrap: { position: "absolute", top: sp(4), right: sp(4), zIndex: 10 },
   bookmarkBtn: {
@@ -420,8 +435,9 @@ const useStyles = makeStyles((t) => ({
     borderRadius: radius["2xl"],
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: alpha(colors.white, 0.2),
-    backgroundColor: alpha(colors.white, 0.1),
+    borderColor: alpha(colors.white, 0.25),
+    // dark glass: the white one vanished on light photos (logo on white, Prince 18 Nov)
+    backgroundColor: alpha(colors.black, 0.35),
     alignItems: "center",
     justifyContent: "center",
   },

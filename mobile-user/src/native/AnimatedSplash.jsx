@@ -5,10 +5,12 @@
 //      behind the splash, and anything moving then jumps - restaurant/delivery lesson);
 //   2. show (once the app is ready and mounted, so the UI thread is free): the burger is built on the plate layer by
 //      layer - bun, patty, melting cheese, lettuce, tomato, sesame top bun - each one dropping in with a small bounce;
-//      fries and a cold drink pop up beside the plate, steam rises, sparkles burst and "ORDER · EAT · REPEAT" fades in;
+//      fries and a cold drink pop up beside the plate, steam rises, sparkles burst and "ORDER · EAT · ENJOY" fades in;
 //   3. exit: the scene zooms a little and fades into the app.
 // Prince (18 Nov): the old scene (thin outline icons + a growing name that rendered huge and off-centre because the
 // smile's JS-driven width was mixed with native-driven transforms) "had nothing of food in it" - replaced.
+// Prince (18 Nov, later): the splash took ~4.5 s - too slow on every launch ("fast and smooth like Zomato"). Start delay
+// 200 ms, glide 420, burger 700, exit 250; the app mounts after the burger is built (app/_layout.jsx).
 // Every animation runs on the native driver. Same API as the other Foodie apps: ready / onShown / onDone, SPLASH_BG.
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Image, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
@@ -25,15 +27,15 @@ const NATIVE_WORDMARK_W = 240 * 0.7;
 export const SPLASH_BG = '#B80B3D'; // app.json splash background
 const WARM = '#FFD58A';
 
-const START_DELAY_MS = 380; // the native splash fades out over ~300 ms: start after it
-const ENTRANCE_MS = 900; // wordmark grows + lifts, plate fades in
-const SHOW_DELAY_MS = 220; // lets the first screen behind the splash finish mounting
-const SHOW_MS = 2100; // the burger being built
-const EXIT_MS = 480;
+const START_DELAY_MS = 200; // after the native splash's 150 ms fade (app/_layout.jsx setOptions)
+const ENTRANCE_MS = 420; // wordmark grows + lifts, plate fades in
+const SHOW_DELAY_MS = 0; // lets the first screen behind the splash finish mounting
+const SHOW_MS = 700; // the burger being built
+const EXIT_MS = 250;
 const SMOOTH_FRAMES = 4;
 const SMOOTH_FRAME_MS = 26;
-const SMOOTH_MAX_WAIT_MS = 1200;
-const MAX_WAIT_MS = 3000;
+const SMOOTH_MAX_WAIT_MS = 450;
+const MAX_WAIT_MS = 1500;
 // Android does not draw a view at opacity 0: parts start at PRE (invisible on screen) so their first draw happens
 // before anything moves
 const PRE = 0.004;
@@ -172,7 +174,7 @@ function Soda() {
 }
 
 /** ready: the app can show its first screen. onShown: hide the native splash. onDone: unmount the splash. */
-export function AnimatedSplash({ ready, onShown, onDone }) {
+export function AnimatedSplash({ ready, onShown, onBuilt, onDone }) {
   const { width, height } = useWindowDimensions();
   const enter = useRef(new Animated.Value(0)).current; // wordmark + plate 0 -> 1
   const show = useRef(new Animated.Value(0)).current; // burger build 0 -> 1
@@ -184,6 +186,11 @@ export function AnimatedSplash({ ready, onShown, onDone }) {
   const showingRef = useRef(false);
   const onDoneRef = useRef(onDone);
   onDoneRef.current = onDone;
+  // The root mounts the app once the burger is built (app/_layout.jsx): mounting it commits the whole first screen at
+  // once and stalls the UI thread ~0.3 s - during the burger build that read as a hitch (recorded at 30 fps, 18 Nov).
+  // Glide and burger now run on an idle thread; the app mounts while the finished burger is on screen.
+  const onBuiltRef = useRef(onBuilt);
+  onBuiltRef.current = onBuilt;
 
   // wordmark laid out at its final size (sharp), scaled down to the native splash's size at the start
   const WORDMARK_W = Math.round(Math.min(250, width * 0.62));
@@ -214,7 +221,7 @@ export function AnimatedSplash({ ready, onShown, onDone }) {
 
   // entrance: after the native splash has faded, once ready and frames come smoothly again
   useEffect(() => {
-    if (!shown || !ready) return undefined;
+    if (!shown) return undefined;
     let cancelled = false;
     let raf = 0;
     const waitForSmoothFrames = () => {
@@ -237,7 +244,7 @@ export function AnimatedSplash({ ready, onShown, onDone }) {
       clearTimeout(timer);
       cancelAnimationFrame(raf);
     };
-  }, [shown, ready]);
+  }, [shown]);
 
   useEffect(() => {
     let started = false;
@@ -248,7 +255,7 @@ export function AnimatedSplash({ ready, onShown, onDone }) {
       Animated.timing(enter, { toValue: 1, duration: ENTRANCE_MS, easing: Easing.bezier(0.42, 0, 0.2, 1), useNativeDriver: true }).start(() =>
         setEntered(true),
       );
-      timers.push(setTimeout(() => setEntered(true), ENTRANCE_MS + 400));
+      timers.push(setTimeout(() => setEntered(true), ENTRANCE_MS + 120));
     };
     startRef.current = start;
     timers.push(setTimeout(start, MAX_WAIT_MS)); // never laid out (should not happen)
@@ -256,18 +263,29 @@ export function AnimatedSplash({ ready, onShown, onDone }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once on mount
   }, []);
 
-  // build the burger, then leave (onDone read from a ref: a re-render of the root layout cannot cancel the exit)
+  // build the burger right after the glide, then (onBuilt) the app mounts behind it; leave once the app is ready
+  // (onDone read from a ref: a re-render of the root layout cannot cancel the exit). The burger used to wait for the
+  // app to mount: ~0.8 s of an empty plate (18 Nov).
+  const [built, setBuilt] = useState(false);
   useEffect(() => {
-    if (!ready || !entered || showingRef.current) return undefined;
+    if (!entered || showingRef.current) return undefined;
     showingRef.current = true;
     const timer = setTimeout(() => {
-      Animated.sequence([
-        Animated.timing(show, { toValue: 1, duration: SHOW_MS, easing: Easing.linear, useNativeDriver: true }),
-        Animated.timing(exit, { toValue: 1, duration: EXIT_MS, easing: Easing.in(Easing.quad), useNativeDriver: true }),
-      ]).start(() => onDoneRef.current?.());
+      Animated.timing(show, { toValue: 1, duration: SHOW_MS, easing: Easing.linear, useNativeDriver: true }).start(() => setBuilt(true));
     }, SHOW_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [ready, entered, show, exit]);
+  }, [entered, show]);
+  const leavingRef = useRef(false);
+  useEffect(() => {
+    if (built) onBuiltRef.current?.();
+  }, [built]);
+  useEffect(() => {
+    if (!ready || !built || leavingRef.current) return;
+    leavingRef.current = true;
+    Animated.timing(exit, { toValue: 1, duration: EXIT_MS, easing: Easing.in(Easing.quad), useNativeDriver: true }).start(() =>
+      onDoneRef.current?.(),
+    );
+  }, [ready, built, exit]);
 
   // ---- entrance
   const wordY = enter.interpolate({ inputRange: [0, 1], outputRange: [0, -LIFT_Y] });
@@ -426,7 +444,7 @@ export function AnimatedSplash({ ready, onShown, onDone }) {
           <View style={styles.taglineRow}>
             <View style={styles.dot} />
             <Text allowFontScaling={false} style={styles.tagline}>
-              ORDER · EAT · REPEAT
+              ORDER · EAT · ENJOY
             </Text>
             <View style={styles.dot} />
           </View>

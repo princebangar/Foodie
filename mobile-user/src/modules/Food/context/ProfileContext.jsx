@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useMemo, useCallback } from "react"
+import { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { authAPI, userAPI } from "@food/api"
 import { normalizeImageUrl } from "@food/utils/common"
 import { Image as ExpoImage } from "expo-image"
@@ -628,6 +628,18 @@ export function ProfileProvider({ children }) {
   )
 
   return <ProfileContext.Provider value={value}>{children}</ProfileContext.Provider>
+}
+
+/**
+ * Kept-alive tabs (MainTabKeepAlive): while `hold` is true the pages below keep seeing the value they last saw, so a
+ * hidden tab is not re-rendered by every profile change (order type on a tab switch, cart updates...).
+ * Each one re-rendered both Home tabs, Dining and Under 250 at once (18 Nov). Released, it passes the live value again.
+ */
+export function HoldProfileContext({ hold, children }) {
+  const live = useContext(ProfileContext)
+  const held = useRef(live)
+  if (!hold) held.current = live
+  return <ProfileContext.Provider value={held.current}>{children}</ProfileContext.Provider>
 }
 
 export function useProfile() {

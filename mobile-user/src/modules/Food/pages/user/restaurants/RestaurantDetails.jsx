@@ -704,6 +704,14 @@ function RestaurantDetailsContent() {
         return
       }
 
+      // A card from Home / a list passes the restaurant's ObjectId: start the menu and outlet timings now, alongside
+      // the restaurant lookup. The menu used to wait for the restaurant response (two round trips before any dish
+      // showed); the calls below reuse these in-flight requests (createInFlightCache in services/api).
+      if (!fetchedRestaurantRef.current && isMongoObjectId(seededMongoId)) {
+        restaurantAPI.getMenuByRestaurantId(seededMongoId).catch(() => {})
+        restaurantAPI.getOutletTimingsByRestaurantId(seededMongoId).catch(() => {})
+      }
+
       try {
         // Keep the existing page visible on background retries.
         setLoadingRestaurant(!fetchedRestaurantRef.current && !restaurant)

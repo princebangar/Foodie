@@ -3,7 +3,7 @@
 // dynamic under-250 price limit (GET /food/landing/settings/public) and hide-on-scroll-down / show-on-scroll-up.
 // The web read window.scrollY; here the open tab's list offset comes from browseScrollMemory (the browse pages
 // register their lists there).
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState, startTransition } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
@@ -202,7 +202,9 @@ export default function BottomNavigation() {
       // Always navigate — even same-looking paths must leave Under250/Dining instantly
       navigate(item.to, { replace: current === target });
       // its own render pass, after the route's
-      if (item.orderType && setOrderType) setTimeout(() => setOrderType(item.orderType), 0);
+      // a transition: every page reading the profile context (both Home tabs, Dining, Under 250, Profile, the cart)
+      // re-renders for it - interruptible, so it cannot hold up the next tap (18 Nov)
+      if (item.orderType && setOrderType) setTimeout(() => startTransition(() => setOrderType(item.orderType)), 0);
     });
   };
 

@@ -1205,6 +1205,10 @@ export default function Under250({ isTabActive = true }) {
   const bannerPan = useMemo(
     () =>
       PanResponder.create({
+        // Prince (18 Nov): a sideways swipe often scrolled the page instead - the list took the touch before this
+        // swipe reached 10 px. Claimed in the capture phase from 6 px when clearly sideways; once it has the touch
+        // the page cannot take it over (onShouldBlockNativeResponder, default true).
+        onMoveShouldSetPanResponderCapture: (_, g) => Math.abs(g.dx) > 6 && Math.abs(g.dx) > Math.abs(g.dy) * 1.2,
         onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 10 && Math.abs(g.dx) > Math.abs(g.dy),
         onPanResponderGrant: () => bannerHandlersRef.current.handleBannerTouchStart(),
         onPanResponderMove: (_, g) => bannerHandlersRef.current.handleBannerTouchMove(g.dx, g.dy),

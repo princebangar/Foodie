@@ -1,3 +1,6 @@
+// Prince (18 Nov): the small "Foodie" stayed on screen too long (up to 1.2 s waiting for smooth frames) and the whole
+// splash felt slow. Timings cut: start delay 450 -> 300 ms, smooth-frame wait max 1200 -> 350, lift 900 -> 550,
+// entrance 1000 -> 600, exit delay 250 -> 80, cloche exit 1100 -> 750.
 // Brand splash shown right after the native splash (the restaurant header's dark crimson + the Restaurant Partner
 // wordmark), looking exactly like it at first. Then the wordmark grows and lifts (one slow eased move), a covered dish
 // (cloche on a plate) in a soft warm spotlight fades in below it, and the tagline fades in under the dish. When the app
@@ -22,20 +25,35 @@ const WORDMARK = require('../../assets/splash-wordmark-light.png'); // 900 x 421
 // takes over), and the wordmark grows to the bigger size while it lifts. The entrance waits START_DELAY_MS so the
 // native wordmark has faded out first (two wordmarks overlapping looked like a wiggle).
 const WORDMARK_RATIO = 421 / 900;
-const NATIVE_WORDMARK_W = (240 * 635) / 1024;
+// Prince (18 Nov): the native splash now shows the icon's "RESTAURANT PARTNER" label under the wordmark (same font and
+// colours: cut from assets/icon.png into assets/splash-partner-label.png). Wordmark + label are one block centred in
+// Android 12's 192 dp icon circle, so the wordmark is a little smaller and sits above the centre. The numbers below
+// are that layout (dp, from the window centre); this splash starts with the same picture and fades the label out as
+// the wordmark lifts.
+const NATIVE_WORDMARK_W = 139.45;
+// splash-wordmark-light.png is 900 x 421 with the mark in the top 352 px (69 px of transparent space under it); the
+// native splash uses the trimmed mark, this splash centres the whole image: move it down by half that space, or the
+// wordmark jumped ~5 dp up when this splash took over (recorded at 30 fps, 18 Nov)
+const NATIVE_WORDMARK_Y = -25.2 + (NATIVE_WORDMARK_W * 69) / 2 / 900;
+const PARTNER_LABEL = require('../../assets/splash-partner-label.png');
+const NATIVE_LABEL_W = 161.95;
+const NATIVE_LABEL_H = NATIVE_LABEL_W * 0.2648;
+const NATIVE_LABEL_Y = 31.29;
 // the restaurant header's dark end (bg-gradient-to-br from-[#B80B3D] to-[#66001D]); app.json splash + window
 // background use the same colour
 export const SPLASH_BG = '#66001D';
 const ORANGE = '#FF5A0A';
 const WARM = '#FFD58A';
-const ENTRANCE_MS = 1000; // scene and tagline fading in
-const LIFT_MS = 900; // the wordmark growing + lifting
-const START_DELAY_MS = 450; // the native splash fades out over ~300 ms: start after it
-const EXIT_MS = 1100; // the cloche lifting off + the steam + the fade at its end
-const EXIT_DELAY_MS = 250;
+const ENTRANCE_MS = 600; // scene and tagline fading in
+// Prince (18 Nov): at 550 ms lift / 350 ms smooth-frame wait the wordmark jumped (it started inside the app's mount
+// stall); back to a longer glide that starts once frames are smooth.
+const LIFT_MS = 700; // the wordmark growing + lifting
+const START_DELAY_MS = 380; // the native splash's 150 ms fade ends later on the phone than asked (recorded 18 Nov): at 220 both pictures showed for a frame
+const EXIT_MS = 750; // the cloche lifting off + the steam + the fade at its end
+const EXIT_DELAY_MS = 80;
 const SMOOTH_FRAMES = 4; // frames in a row, each under SMOOTH_FRAME_MS, before the wordmark starts to grow
 const SMOOTH_FRAME_MS = 26;
-const SMOOTH_MAX_WAIT_MS = 1200; // start anyway after this long
+const SMOOTH_MAX_WAIT_MS = 800; // start anyway after this long
 // Android does not draw a view at opacity 0, so the scene's SVGs and the tagline were first drawn (rasterised) the
 // moment they started to fade in — a UI-thread stall in the middle of the wordmark's growth (it read as a jump).
 // Starting them at PRE (invisible on screen) gets that first draw done while nothing moves yet.
@@ -121,7 +139,7 @@ export function AnimatedSplash({ ready, onShown, onDone }) {
             Animated.timing(lift, { toValue: 1, duration: LIFT_MS, easing: Easing.bezier(0.42, 0, 0.2, 1), useNativeDriver: true }),
             Animated.timing(t, { toValue: 1, duration: ENTRANCE_MS, easing: Easing.linear, useNativeDriver: true }),
           ]).start(() => setEntered(true));
-          timers.push(setTimeout(() => setEntered(true), ENTRANCE_MS + 400));
+          timers.push(setTimeout(() => setEntered(true), ENTRANCE_MS + 120));
         }, delay),
       );
     };
@@ -231,13 +249,27 @@ export function AnimatedSplash({ ready, onShown, onDone }) {
           {
             top: height / 2 - WORDMARK_H / 2,
             transform: [
-              { translateY: lift.interpolate({ inputRange: [0, 1], outputRange: [0, -LIFT_Y] }) },
+              { translateY: lift.interpolate({ inputRange: [0, 1], outputRange: [NATIVE_WORDMARK_Y, -LIFT_Y] }) },
               { scale: lift.interpolate({ inputRange: [0, 1], outputRange: [startScale, 1] }) },
             ],
           },
         ]}
       >
         <Image source={WORDMARK} style={{ width: WORDMARK_W, height: WORDMARK_H }} fadeDuration={0} />
+      </Animated.View>
+
+      {/* the native splash's PARTNER label: same place, fades out as soon as the wordmark starts to lift */}
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.center,
+          {
+            top: height / 2 + NATIVE_LABEL_Y - NATIVE_LABEL_H / 2,
+            opacity: lift.interpolate({ inputRange: [0, 0.35], outputRange: [1, 0], extrapolate: 'clamp' }),
+          },
+        ]}
+      >
+        <Image source={PARTNER_LABEL} style={{ width: NATIVE_LABEL_W, height: NATIVE_LABEL_H }} fadeDuration={0} />
       </Animated.View>
 
       <Animated.View pointerEvents="none" style={[styles.center, { top: taglineTop, opacity: tagline }]}>

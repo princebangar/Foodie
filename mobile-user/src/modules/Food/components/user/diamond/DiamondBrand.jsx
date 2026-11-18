@@ -10,8 +10,11 @@ import { AppImage, Text } from "@/native/ui"
 import { fonts } from "@/theme"
 import foodieWordmark from "@food/assets/diamond/foodie-wordmark-white.webp"
 
-export const DIAMOND_BG = "#0B0E13"
-export const DIAMOND_CARD = "#161B22"
+// Prince (18 Nov): first near-black (#0B0E13, "all black"), then saturated sapphire ("too blue, looks like AI"). Now
+// a calm slate navy: clearly blue next to the app's black / white, but muted. One solid colour, no gradients; the
+// Profile card uses the same DIAMOND_BG as the Diamond page.
+export const DIAMOND_BG = "#1B2838"
+export const DIAMOND_CARD = "#253649"
 export const DIAMOND_ICE = "#9EE6FF"
 export const DIAMOND_ICE_SOFT = "#CDEFFC"
 /** web: 'Outfit', 'Figtree', sans-serif */

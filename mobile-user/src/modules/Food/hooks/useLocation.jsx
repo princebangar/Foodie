@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react"
+import { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { locationAPI, userAPI } from "@food/api"
 import { useProfile } from "@food/context/ProfileContext"
 import apiClient from "@food/api/axios"
@@ -420,7 +420,7 @@ export function useLocation() {
     return false
   })
 
-  const [location, setLocation] = useState(() => {
+  const [location, setLocationRaw] = useState(() => {
     try {
       const cached = localStorage.getItem("userLocation")
       if (cached) return JSON.parse(cached)
@@ -434,6 +434,19 @@ export function useLocation() {
       return isEnabled ? TEMPORARY_DEFAULT_INDORE_LOCATION : null
     }
   })
+  // Every kept-alive tab (both Home tabs, Dining, Under 250) runs this hook, and many paths here set a freshly parsed
+  // copy of the same location (storage / custom events, refreshes). Each copy re-rendered all of those pages (70-170 ms
+  // each on the phone, 18 Nov). Keep the current object when the new one is the same location.
+  const setLocation = useCallback((next) => {
+    setLocationRaw((prev) => {
+      const value = typeof next === "function" ? next(prev) : next
+      if (value === prev) return prev
+      try {
+        if (value && prev && JSON.stringify(value) === JSON.stringify(prev)) return prev
+      } catch {}
+      return value
+    })
+  }, [])
   const [loading, setLoading] = useState(globalLocationLoading)
 
   useEffect(() => {

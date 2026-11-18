@@ -56,6 +56,9 @@ const RestaurantImageCarousel = React.memo(
     focusId = "",
     visibleCount,
     categoryFallbackImage = null,
+    // position of the card in its list: cards next to each other slide at different moments (18 Nov, Prince: every
+    // card on screen used to change its dish at the same instant)
+    staggerIndex = 0,
   }) => {
     const s = useStyles();
     const webviewSessionKeyRef = useRef(WEBVIEW_SESSION_CACHE_BUSTER);
@@ -177,7 +180,7 @@ const RestaurantImageCarousel = React.memo(
     // (web: IntersectionObserver with rootMargin -20% top/bottom).
     useEffect(() => {
       if (slideItems.length <= 1) return undefined;
-      const timer = setInterval(() => {
+      const tick = () => {
         const node = carouselRef.current;
         if (!node?.measureInWindow) return;
         node.measureInWindow((x, y, w, h) => {
@@ -185,9 +188,18 @@ const RestaurantImageCarousel = React.memo(
           const isCentered = h > 0 && y < screenH * 0.8 && y + h > screenH * 0.2;
           if (isCentered) handleNext();
         });
-      }, 3000);
-      return () => clearInterval(timer);
-    }, [slideItems.length, handleNext]);
+      };
+      // cards 0 / 1 / 2 / 3 ... slide 1 s apart: one change per second across the screen, not all at once
+      let interval = null;
+      const start = setTimeout(() => {
+        tick();
+        interval = setInterval(tick, 3000);
+      }, 3000 + (Math.abs(Number(staggerIndex) || 0) % 3) * 1000);
+      return () => {
+        clearTimeout(start);
+        if (interval) clearInterval(interval);
+      };
+    }, [slideItems.length, handleNext, staggerIndex]);
 
     useEffect(() => {
       if (currentIndex === infiniteSlides.length - 1 && slideItems.length > 1) {
@@ -232,6 +244,10 @@ const RestaurantImageCarousel = React.memo(
     const panResponder = useMemo(
       () =>
         PanResponder.create({
+          // Prince (18 Nov): a sideways swipe often scrolled the page instead - the list took the touch before this
+          // swipe reached 10 px. Claimed in the capture phase from 6 px when clearly sideways; once it has the touch
+          // the page cannot take it over (onShouldBlockNativeResponder, default true).
+          onMoveShouldSetPanResponderCapture: (_, g) => Math.abs(g.dx) > 6 && Math.abs(g.dx) > Math.abs(g.dy) * 1.2,
           onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 10 && Math.abs(g.dx) > Math.abs(g.dy),
           onPanResponderTerminationRequest: () => false,
           onPanResponderRelease: (_, g) => {

@@ -125,6 +125,9 @@ if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental
 
 const BRAND_RED = "#DC2626";
 const HOME_BANNER_RED = "#D91F3A"; // .home-red-banner-bg
+// Default home banner (Prince, 18 Nov): shown when the admin has no fest banner. 1080 x 1068 like the red top
+// section, plain #D91F3A behind the location / search rows, dishes + quote below them (docs/banners).
+const HOME_DEFAULT_BANNER = require("@food/assets/banners/home_default_banner.jpg");
 const PROFILE_AVATAR = "/images/profile-avatar.webp";
 // shadcn CSS variables used by the web Button / Input defaults (global.css)
 const brandInputColor = "#f2f0ea";
@@ -354,10 +357,29 @@ const highlightOut = new Keyframe({
   100: { opacity: 0, transform: [{ translateY: 16 }] },
 }).duration(220);
 
+// Offer / highlight rows: every card's row used to change at the same instant. Rows of neighbouring cards are 1 s apart,
+// and 1.5 s off their own card's dish slide (RestaurantImageCarousel staggers by the same index).
+const staggeredStartMs = (staggerIndex) => 3000 + ((Math.abs(Number(staggerIndex) || 0) % 3) * 1000 + 1500) % 3000;
+const useStaggeredRotation = (count, staggerIndex, setIndex, deps) => {
+  useEffect(() => {
+    if (count <= 1) return undefined;
+    let interval = null;
+    const start = setTimeout(() => {
+      setIndex((prev) => (prev + 1) % count);
+      interval = setInterval(() => setIndex((prev) => (prev + 1) % count), 3000);
+    }, staggeredStartMs(staggerIndex));
+    return () => {
+      clearTimeout(start);
+      if (interval) clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deps given by the caller
+  }, [count, staggerIndex, ...deps]);
+};
+
 // Restaurant Card Offer Carousel Component - cycles through active coupons
 // `compact` is the smaller size used on the narrow "Recommended For You" cards:
 // the text wraps onto a second line there instead of being cut off.
-const RestaurantCardOfferCarousel = React.memo(({ coupons, compact = false }) => {
+const RestaurantCardOfferCarousel = React.memo(({ coupons, compact = false, staggerIndex = 0 }) => {
   const s = useStyles();
   const rowStyle = compact ? s.couponRowCompact : s.couponRow;
   const iconStyle = compact ? s.couponIconCompact : s.couponIcon;
@@ -380,13 +402,7 @@ const RestaurantCardOfferCarousel = React.memo(({ coupons, compact = false }) =>
 
   const couponsKey = uniqueCoupons.map(c => c.couponCode || c.code || "").join(",");
 
-  useEffect(() => {
-    if (uniqueCoupons.length <= 1) return undefined;
-    const interval = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % uniqueCoupons.length);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [couponsKey, uniqueCoupons.length]);
+  useStaggeredRotation(uniqueCoupons.length, staggerIndex, setCurrentIndex, [couponsKey]);
 
   if (uniqueCoupons.length === 0) return null;
 
@@ -427,7 +443,7 @@ const RestaurantCardOfferCarousel = React.memo(({ coupons, compact = false }) =>
 
 // Fills the offer slot on "Recommended For You" cards that have no offer:
 // rotates short highlights built from the restaurant's own data, same slide as the offers.
-const RecommendedHighlightCarousel = React.memo(({ restaurant }) => {
+const RecommendedHighlightCarousel = React.memo(({ restaurant, staggerIndex = 0 }) => {
   const s = useStyles();
   const t = useTheme();
   const highlights = React.useMemo(() => {
@@ -462,11 +478,7 @@ const RecommendedHighlightCarousel = React.memo(({ restaurant }) => {
   }, [restaurant?.pureVegRestaurant, restaurant?.rating, t.dark]);
 
   const [currentIndex, setCurrentIndex] = useState(0);
-  useEffect(() => {
-    if (highlights.length <= 1) return undefined;
-    const interval = setInterval(() => setCurrentIndex((prev) => (prev + 1) % highlights.length), 3000);
-    return () => clearInterval(interval);
-  }, [highlights.length]);
+  useStaggeredRotation(highlights.length, staggerIndex, setCurrentIndex, []);
 
   const current = highlights[currentIndex] || highlights[0];
   return (
@@ -535,6 +547,10 @@ function HeroCarousel({ slides, index, transitionEnabled, onSwipeStart, onSwipeE
   handlers.current = { onSwipeStart, onSwipeEnd };
   const pan = useRef(
     PanResponder.create({
+      // Prince (18 Nov): a sideways swipe often scrolled the page instead - the list took the touch before this
+      // swipe reached 10 px. Claimed in the capture phase from 6 px when clearly sideways; once it has the touch
+      // the page cannot take it over (onShouldBlockNativeResponder, default true).
+      onMoveShouldSetPanResponderCapture: (_e, g) => Math.abs(g.dx) > 6 && Math.abs(g.dx) > Math.abs(g.dy) * 1.2,
       onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dx) > 10 && Math.abs(g.dx) > Math.abs(g.dy),
       onPanResponderGrant: () => handlers.current.onSwipeStart?.(),
       onPanResponderRelease: (_e, g) => handlers.current.onSwipeEnd?.(g.dx, g.dy),
@@ -922,6 +938,7 @@ export default function Home({ homeMode = null, isTabActive = true }) {
   const vegModeToggleRef = useRef(null); // the toggle in the home header
   const stickyVegToggleRef = useRef(null); // the one in the sticky bar (only while it shows)
   const [isStickyHeaderVisible, setIsStickyHeaderVisible] = useState(false);
+  const [isPastTop, setIsPastTop] = useState(false);
 
   const [showStickySearch, setShowStickySearch] = useState(false);
   const scrollYRef = useRef(0);
@@ -929,13 +946,17 @@ export default function Home({ homeMode = null, isTabActive = true }) {
   const contentHeightRef = useRef(0);
   const viewportHeightRef = useRef(0);
   // "categories-section" bottom inside the scroll content (the web measured it with getBoundingClientRect)
-  const layoutRef = useRef({ foodY: 0, catY: 0, catH: 0 });
+  const layoutRef = useRef({ foodY: 0, catY: 0, catH: 0, topH: 0 });
   const categoriesBottom = () => {
     const l = layoutRef.current;
     return l.catH ? l.foodY + l.catY + l.catH : Infinity;
   };
 
   const handleScrollHeader = useCallback((currentScrollY) => {
+    // the red top section has scrolled away: the status bar takes the page colour (Takeaway has no sticky header)
+    const topH = layoutRef.current.topH;
+    const pastTop = topH > 0 && currentScrollY > topH - 4;
+    setIsPastTop((prev) => (prev === pastTop ? prev : pastTop));
     const sectionBottom = categoriesBottom();
     if (sectionBottom === Infinity) return;
     const past = currentScrollY > sectionBottom;
@@ -1008,9 +1029,14 @@ export default function Home({ homeMode = null, isTabActive = true }) {
   const [exploreMoreHeading, setExploreMoreHeading] = useState(
     () => CACHED_EXPLORE_BOOT?.heading || "Explore More",
   );
+  // Admin fest banner: undefined = not known yet (first start, nothing cached), "" = none (show the default design),
+  // a URL = the admin banner. Prince (18 Nov): the default design must never show when an admin banner exists - not
+  // even while it loads; until the settings answer on a first start the red section stays plain.
   const [festBannerImageUrl, setFestBannerImageUrl] = useState(() => {
-    try { return localStorage.getItem("CACHED_FEST_BANNER") || null; }
-    catch (e) { return null; }
+    try {
+      const cached = localStorage.getItem("CACHED_FEST_BANNER");
+      return cached === null ? undefined : cached;
+    } catch (e) { return undefined; }
   });
   const [festBannerTopColor, setFestBannerTopColor] = useState(() => {
     try { return localStorage.getItem("CACHED_FEST_BANNER_COLOR") || ''; } catch (e) { return ''; }
@@ -2375,6 +2401,9 @@ export default function Home({ homeMode = null, isTabActive = true }) {
         ? "/user"
         : routerLocation.pathname || "/user";
 
+  // the kept-alive Home tabs keep a frozen location (MainTabKeepAlive): their own path comes from homeMode
+  const homeFromPath = homeMode ? `/food${homeBrowsePath}` : routerLocation.pathname;
+
   const rememberHomeBrowsePosition = useCallback((focusId) => {
     saveBrowseScroll({
       path: homeBrowsePath,
@@ -2725,6 +2754,7 @@ export default function Home({ homeMode = null, isTabActive = true }) {
 
   const isDeliveryView = effectiveOrderType !== "takeaway" && !isTakeawayPage;
   const headerColor = festBannerImageUrl && isDeliveryView && festBannerTopColor ? festBannerTopColor : HOME_BANNER_RED;
+  const statusOnPage = isDeliveryView ? isStickyHeaderVisible && activeTab === "food" : isPastTop;
 
   const requireLoginOr = (fn) => {
     if (!isModuleAuthenticated('user')) {
@@ -2739,18 +2769,26 @@ export default function Home({ homeMode = null, isTabActive = true }) {
     <View>
       <View style={s.topWrap}>
         {/* Brand Top Section (Red Theme) */}
-        <View style={[s.brandTop, { backgroundColor: headerColor, paddingTop: insets.top }]}>
-          {!!festBannerImageUrl && (
+        <View
+          style={[s.brandTop, { backgroundColor: headerColor, paddingTop: insets.top }]}
+          onLayout={(e) => {
+            layoutRef.current.topH = e.nativeEvent.layout.y + e.nativeEvent.layout.height;
+          }}
+        >
+          {/* admin fest banner, or the bundled default banner when the admin has none ("" = known none); nothing while
+              it is not known yet (first start), so the default never shows before an admin banner */}
+          {(!!festBannerImageUrl || festBannerImageUrl === "") && (
             <View
               style={[StyleSheetAbs, { zIndex: 0, opacity: isDeliveryView ? 1 : 0 }]}
               pointerEvents={isDeliveryView ? "auto" : "none"}
             >
               <AppImage
-                src={festBannerImageUrl}
+                src={festBannerImageUrl || HOME_DEFAULT_BANNER}
                 style={{ width: "100%", height: "100%" }}
                 contentFit="cover"
-                transition={200}
+                transition={festBannerImageUrl ? 200 : 0}
                 onError={() => {
+                  if (!festBannerImageUrl) return;
                   setFestBannerImageUrl("");
                   setFestBannerTopColor("");
                   try { localStorage.setItem("CACHED_FEST_BANNER", ""); } catch (e) {}
@@ -2774,7 +2812,8 @@ export default function Home({ homeMode = null, isTabActive = true }) {
                 // Pass Banner Props to Unified Component
                 showBanner={activeTab === "food" && isDeliveryView}
                 videoUrl={""}
-                hideFoodImages={!!festBannerImageUrl}
+                // the hero's own drawn content is not used any more: the default is the bundled banner image (Prince, 18 Nov)
+                hideFoodImages
               />
             ) : (
               <View style={s.takeawayHead}>
@@ -2796,7 +2835,7 @@ export default function Home({ homeMode = null, isTabActive = true }) {
                     </Pressable>
                     <Link
                       to="/food/user/cart"
-                      state={{ from: routerLocation.pathname }}
+                      state={{ from: homeFromPath }}
                       style={({ pressed }) => [s.roundBtn, pressed && { transform: [{ scale: 0.95 }] }]}
                     >
                       <ShoppingCart size={20} color={colors.white} strokeWidth={2.5} />
@@ -2807,7 +2846,7 @@ export default function Home({ homeMode = null, isTabActive = true }) {
                       )}
                     </Link>
                     <Pressable
-                      onPress={() => requireLoginOr(() => navigate("/food/user/profile", { state: { from: routerLocation.pathname } }))}
+                      onPress={() => requireLoginOr(() => navigate("/food/user/profile", { state: { from: homeFromPath } }))}
                       style={({ pressed }) => [s.takeawayAvatar, pressed && { transform: [{ scale: 0.95 }] }]}
                     >
                       <AppImage src={userProfile?.profileImage || PROFILE_AVATAR} fallback={PROFILE_AVATAR} style={{ width: "100%", height: "100%" }} contentFit="cover" />
@@ -2937,7 +2976,7 @@ export default function Home({ homeMode = null, isTabActive = true }) {
             {/* Filters Sticky Sidebar Header - Hidden for takeaway as per request */}
             {isDeliveryView && (
               <View style={s.filterBar}>
-                <ScrollView style={{ flexGrow: 0 }} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterRow}>
+                <ScrollView style={{ flexGrow: 0 }} horizontal showsHorizontalScrollIndicator={false} overScrollMode="never" contentContainerStyle={s.filterRow}>
                   <Pressable
                     onPress={() => setIsFilterOpen(true)}
                     style={({ pressed }) => [s.filtersBtn, pressed && { transform: [{ scale: 0.95 }] }]}
@@ -3041,6 +3080,7 @@ export default function Home({ homeMode = null, isTabActive = true }) {
                     <View style={s.recoImage}>
                       <RestaurantImageCarousel
                         restaurant={restaurant}
+                        staggerIndex={index}
                         backendOrigin={BACKEND_ORIGIN}
                         style={{ height: 96 }}
                         roundedClass="rounded-t-[20px]"
@@ -3074,9 +3114,9 @@ export default function Home({ homeMode = null, isTabActive = true }) {
                         </View>
                       )}
                       {restaurantCoupons.length > 0 ? (
-                        <RestaurantCardOfferCarousel coupons={restaurantCoupons} compact />
+                        <RestaurantCardOfferCarousel coupons={restaurantCoupons} compact staggerIndex={index} />
                       ) : (
-                        <RecommendedHighlightCarousel restaurant={restaurant} />
+                        <RecommendedHighlightCarousel restaurant={restaurant} staggerIndex={index} />
                       )}
                     </View>
                   </Link>
@@ -3207,12 +3247,14 @@ export default function Home({ homeMode = null, isTabActive = true }) {
             )
           }
           // closed / offline cards are not dimmed: the CLOSED / OFFLINE badge says it, the card stays readable
-          style={s.card}
+          // pressed: answers the touch at once while the restaurant page opens (18 Nov)
+          style={({ pressed }) => [s.card, pressed && { opacity: 0.88, transform: [{ scale: 0.985 }] }]}
         >
           {/* Image Section with Carousel */}
           <View>
             <RestaurantImageCarousel
               restaurant={restaurant}
+              staggerIndex={index}
               priority={index < 2}
               backendOrigin={BACKEND_ORIGIN}
               backFrom={homeBrowsePath}
@@ -3248,7 +3290,7 @@ export default function Home({ homeMode = null, isTabActive = true }) {
                 </View>
 
                 {/* Offer Badge - Animated Carousel */}
-                <RestaurantCardOfferCarousel coupons={restaurantCoupons} />
+                <RestaurantCardOfferCarousel coupons={restaurantCoupons} staggerIndex={index} />
               </View>
               <View style={{ alignItems: "flex-end", gap: 2 }}>
                 <View style={s.ratingBadge}>
@@ -3355,7 +3397,10 @@ export default function Home({ homeMode = null, isTabActive = true }) {
 
   return (
     <View style={s.root}>
-      {isTabActive && <StatusBar style="light" />}
+      {/* Prince (18 Nov): the status bar takes the colour of what is right under it - red with light icons over the red
+          top section, the page colour with dark icons once the white sticky header (Home) or the white list
+          (Takeaway) is under it */}
+      {isTabActive && <StatusBar style={statusOnPage && !t.dark ? "dark" : "light"} />}
 
       <FlatList
         ref={listRef}
@@ -3394,13 +3439,15 @@ export default function Home({ homeMode = null, isTabActive = true }) {
         }}
       />
 
-      {/* Takeaway has no sticky header: keep its list from scrolling under the status bar icons */}
-      {!isDeliveryView && <StatusBarScrim color={headerColor} />}
+      {/* Keeps the list from scrolling under the status bar icons (Prince, 18 Nov: it showed on Home while scrolling
+          up, before the sticky header appears). Same colour as the hero behind the status bar, so nothing changes at
+          the top of the page. */}
+      <StatusBarScrim color={statusOnPage ? (t.dark ? "#0a0a0a" : colors.white) : headerColor} />
 
       {/* Dynamic Sticky Header (Search + Slider + Filters) */}
       {isStickyHeaderVisible && activeTab === "food" && isDeliveryView && (
         <StickyFade style={s.sticky}>
-          <View style={{ height: insets.top, backgroundColor: headerColor }} />
+          <View style={{ height: insets.top, backgroundColor: t.dark ? "#0a0a0a" : colors.white }} />
           {/* Search Bar + Veg Mode Row (Always visible when sticky) */}
           {showStickySearch && (
             <View style={s.stickySearchRow}>
@@ -4015,7 +4062,9 @@ const useStyles = makeStyles((t) => {
     root: { flex: 1, backgroundColor: pageBg },
     listContent: { paddingBottom: sp(16), backgroundColor: pageBg },
     topWrap: { overflow: "hidden", backgroundColor: pageBg },
-    brandTop: { overflow: "hidden", borderBottomLeftRadius: 32, borderBottomRightRadius: 32, marginBottom: sp(2), ...shadow.lg },
+    // no shadow / gap under the red hero: its shadow drew a grey band between the hero and the white categories
+    // (Prince, 18 Nov - "a gap shows"); the categories section starts right under it
+    brandTop: { overflow: "hidden", borderBottomLeftRadius: 32, borderBottomRightRadius: 32 },
     // takeaway header
     takeawayHead: { paddingHorizontal: sp(4), paddingTop: sp(2), paddingBottom: sp(4) },
     takeawayRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
@@ -4056,8 +4105,9 @@ const useStyles = makeStyles((t) => {
     pickupTitle: { ...fontSize.lg, fontWeight: "700", color: t.dark ? colors.white : colors.gray[900] },
     pickupSub: { fontSize: 13, lineHeight: 18, fontWeight: "500", color: colors.gray[500], flexShrink: 1 },
     // categories
-    categoriesSection: { paddingVertical: sp(2.5), backgroundColor: pageBg },
-    catRow: { gap: sp(1.5), paddingBottom: sp(2), paddingHorizontal: sp(4) },
+    // categories centred between the red top section and the filters (Prince, 18 Nov: more room under them than above)
+    categoriesSection: { paddingTop: sp(3), paddingBottom: 0, backgroundColor: pageBg },
+    catRow: { gap: sp(1.5), paddingBottom: 0, paddingHorizontal: sp(4) },
     catItem: { width: 92, alignItems: "center", gap: sp(2.5) },
     catCircle: {
       width: 80,
@@ -4085,14 +4135,17 @@ const useStyles = makeStyles((t) => {
     dotActive: { width: 16, height: 6, borderRadius: 9999, backgroundColor: colors.white, ...shadow.sm },
     // filter chips
     filterBar: {
-      paddingVertical: sp(2.5),
-      backgroundColor: t.dark ? alpha("#0a0a0a", 0.95) : alpha(colors.white, 0.95),
+      paddingVertical: sp(1),
+      backgroundColor: pageBg,
       borderBottomWidth: 1,
       borderBottomColor: t.dark ? alpha(colors.white, 0.05) : colors.gray[100],
       zIndex: 40,
-      ...shadow.sm,
+      // no shadow: it drew a grey line between the categories and the filters (Prince, 18 Nov)
     },
-    filterRow: { gap: sp(2), paddingHorizontal: sp(4), alignItems: "center" },
+    // Prince (18 Nov): the chips' rounded bottoms and shadows were cut off (the row was exactly as tall as a chip) and the
+    // 36 dp strip was hard to swipe sideways without the page scrolling. Room above / below the chips; the bar's own
+    // padding is smaller by the same amount.
+    filterRow: { gap: sp(2), paddingHorizontal: sp(4), paddingVertical: sp(1.5), alignItems: "center" },
     filtersBtn: {
       height: 36,
       paddingHorizontal: sp(4),

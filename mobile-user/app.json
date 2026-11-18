@@ -98,7 +98,7 @@
       [
         "expo-audio",
         {
-          "microphonePermission": false,
+          "microphonePermission": "Foodie uses the microphone for voice search.",
           "recordAudioAndroid": true,
           "enableBackgroundPlayback": false
         }
@@ -135,7 +135,7 @@
         {
           "photosPermission": "Foodie needs your photos to upload a profile picture or attach images.",
           "cameraPermission": "Foodie needs the camera to take a profile picture or attach images.",
-          "microphonePermission": false
+          "microphonePermission": "Foodie uses the microphone for voice search."
         }
       ],
       [

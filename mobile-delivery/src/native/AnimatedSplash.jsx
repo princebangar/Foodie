@@ -1,3 +1,5 @@
+// Prince (18 Nov): the small "Foodie" stayed on screen too long before the scene started and the whole splash felt
+// slow. Timings cut: start delay 450 -> 300 ms, entrance 600 -> 450, exit delay 250 -> 80, scooter exit 1150 -> 800.
 // Brand splash shown right after the native splash (the delivery header's blue + the Delivery Partner wordmark), looking
 // exactly like it at first. Then the wordmark grows and lifts,
 // a city skyline and a road fade in below it, and the tagline fades up. When
@@ -17,18 +19,38 @@ const WORDMARK = require('../../assets/splash-wordmark-light.png'); // 900 x 421
 // takes over), and the wordmark grows to the bigger size while it lifts (Prince, 26 Oct). The old "wiggle" was the native
 // wordmark still fading out while this one already moved: the entrance waits START_DELAY_MS.
 const WORDMARK_RATIO = 421 / 900;
-const NATIVE_WORDMARK_W = (240 * 635) / 1024;
+// Prince (18 Nov): the native splash now shows the icon's "DELIVERY PARTNER" label under the wordmark (same font and
+// colours: cut from assets/icon.png into assets/splash-partner-label.png). Wordmark + label are one block centred in
+// Android 12's 192 dp icon circle, so the wordmark is a little smaller and sits above the centre. The numbers below
+// are that layout (dp, from the window centre); this splash starts with the same picture and fades the label out as
+// the wordmark lifts.
+const NATIVE_WORDMARK_W = 136.17;
+// splash-wordmark-light.png is 900 x 421 with the mark in the top 352 px (69 px of transparent space under it); the
+// native splash uses the trimmed mark, this splash centres the whole image: move it down by half that space, or the
+// wordmark jumped ~5 dp up when this splash took over (recorded at 30 fps, 18 Nov)
+const NATIVE_WORDMARK_Y = -27.54 + (NATIVE_WORDMARK_W * 69) / 2 / 900;
+const PARTNER_LABEL = require('../../assets/splash-partner-label.png');
+const NATIVE_LABEL_W = 155.86;
+const NATIVE_LABEL_H = NATIVE_LABEL_W * 0.3023;
+const NATIVE_LABEL_Y = 30.82;
 // the delivery header's blue (deliveryTheme.headerFrom, --dv-primary); app.json splash + window background use the same colour
 export const SPLASH_BG = '#15498B';
 const ORANGE = '#FF4A06';
 const SKY = 'rgba(255,255,255,0.10)';
 const CITY = 'rgba(255,255,255,0.16)';
 const CITY_FAR = 'rgba(255,255,255,0.08)';
-const ENTRANCE_MS = 600; // wordmark lift + city and tagline fading in
-const START_DELAY_MS = 450; // the native splash fades out over ~300 ms: start after it (two wordmarks overlapped)
-const EXIT_MS = 1150; // the scooter crossing the screen + the fade at its end
-const EXIT_DELAY_MS = 250;
+const ENTRANCE_MS = 450; // wordmark lift + city and tagline fading in
+const START_DELAY_MS = 380; // the native splash's 150 ms fade ends later on the phone than asked (recorded 18 Nov): at 220 both pictures showed for a frame
+const EXIT_MS = 800; // the scooter crossing the screen + the fade at its end
+const EXIT_DELAY_MS = 80;
 const MAX_WAIT_MS = 2500;
+// Prince (18 Nov): the wordmark "jumped" up instead of gliding: its lift was a 6-40 % slice of the 450 ms entrance
+// (~150 ms) and started while the UI thread was still busy with the app behind the splash. Now it has its own eased
+// LIFT_MS move, like the customer app, and starts once frames come smoothly (at most SMOOTH_MAX_WAIT_MS of waiting).
+const LIFT_MS = 650;
+const SMOOTH_FRAMES = 4;
+const SMOOTH_FRAME_MS = 26;
+const SMOOTH_MAX_WAIT_MS = 800;
 
 /** ready: the app can show its first screen. onShown: hide the native splash. onDone: unmount the splash. */
 export function AnimatedSplash({ ready, onShown, onDone }) {
@@ -36,6 +58,7 @@ export function AnimatedSplash({ ready, onShown, onDone }) {
   // One native timeline for the whole entrance: Animated's `delay` / sequence steps are JS timers, and the JS thread is
   // busy mounting the app behind the splash, so delayed parts used to start late (the vehicle never showed).
   const t = useRef(new Animated.Value(0)).current; // entrance 0 -> 1
+  const lift = useRef(new Animated.Value(0)).current; // wordmark 0 (native size and place) -> 1 (big, lifted)
   const exit = useRef(new Animated.Value(0)).current; // leave 0 -> 1 (scooter rides off, splash fades)
   const [entered, setEntered] = useState(false);
   const leavingRef = useRef(false);
@@ -56,7 +79,7 @@ export function AnimatedSplash({ ready, onShown, onDone }) {
     shownRef.current = true;
     requestAnimationFrame(() => requestAnimationFrame(() => {
       onShown?.();
-      startRef.current?.(START_DELAY_MS);
+      setTimeout(waitForSmoothFrames, START_DELAY_MS);
     }));
   };
 
@@ -65,6 +88,19 @@ export function AnimatedSplash({ ready, onShown, onDone }) {
   // then the splash looks exactly like the native one (wordmark only). Not tied to the network or the first screen,
   // so it is the same every time.
   const startRef = useRef(null);
+  const waitForSmoothFrames = () => {
+    const since = Date.now();
+    let last = since;
+    let smooth = 0;
+    const tick = () => {
+      const now = Date.now();
+      smooth = now - last < SMOOTH_FRAME_MS ? smooth + 1 : 0;
+      last = now;
+      if (smooth >= SMOOTH_FRAMES || now - since > SMOOTH_MAX_WAIT_MS) startRef.current?.(0);
+      else requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  };
   useEffect(() => {
     let started = false;
     const timers = [];
@@ -73,8 +109,11 @@ export function AnimatedSplash({ ready, onShown, onDone }) {
       started = true;
       timers.push(
         setTimeout(() => {
-          Animated.timing(t, { toValue: 1, duration: ENTRANCE_MS, easing: Easing.linear, useNativeDriver: true }).start(() => setEntered(true));
-          timers.push(setTimeout(() => setEntered(true), ENTRANCE_MS + 400));
+          Animated.parallel([
+            Animated.timing(lift, { toValue: 1, duration: LIFT_MS, easing: Easing.bezier(0.42, 0, 0.2, 1), useNativeDriver: true }),
+            Animated.timing(t, { toValue: 1, duration: ENTRANCE_MS, easing: Easing.linear, useNativeDriver: true }),
+          ]).start(() => setEntered(true));
+          timers.push(setTimeout(() => setEntered(true), Math.max(LIFT_MS, ENTRANCE_MS) + 120));
         }, delay),
       );
     };
@@ -99,7 +138,6 @@ export function AnimatedSplash({ ready, onShown, onDone }) {
   }, [ready, entered, exit]);
 
   // parts of the entrance, as slices of the timeline (eased by the interpolation points)
-  const lift = t.interpolate({ inputRange: [0.06, 0.2, 0.4], outputRange: [0, 0.75, 1], extrapolate: 'clamp' });
   const city = t.interpolate({ inputRange: [0.12, 0.3, 0.5], outputRange: [0, 0.8, 1], extrapolate: 'clamp' });
   const tagline = t.interpolate({ inputRange: [0.45, 0.75, 0.95], outputRange: [0, 0.8, 1], extrapolate: 'clamp' });
   // The scooter rides across in ONE pass, left to right, as the splash leaves: at app start the UI thread stalls at
@@ -211,13 +249,27 @@ export function AnimatedSplash({ ready, onShown, onDone }) {
           {
             top: height / 2 - WORDMARK_H / 2,
             transform: [
-              { translateY: lift.interpolate({ inputRange: [0, 1], outputRange: [0, -Math.min(110, height * 0.13)] }) },
+              { translateY: lift.interpolate({ inputRange: [0, 1], outputRange: [NATIVE_WORDMARK_Y, -Math.min(110, height * 0.13)] }) },
               { scale: lift.interpolate({ inputRange: [0, 1], outputRange: [startScale, 1] }) },
             ],
           },
         ]}
       >
         <Image source={WORDMARK} style={{ width: WORDMARK_W, height: WORDMARK_H }} fadeDuration={0} />
+      </Animated.View>
+
+      {/* the native splash's PARTNER label: same place, fades out as soon as the wordmark starts to lift */}
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.center,
+          {
+            top: height / 2 + NATIVE_LABEL_Y - NATIVE_LABEL_H / 2,
+            opacity: lift.interpolate({ inputRange: [0, 0.35], outputRange: [1, 0], extrapolate: 'clamp' }),
+          },
+        ]}
+      >
+        <Image source={PARTNER_LABEL} style={{ width: NATIVE_LABEL_W, height: NATIVE_LABEL_H }} fadeDuration={0} />
       </Animated.View>
 
       <Animated.View

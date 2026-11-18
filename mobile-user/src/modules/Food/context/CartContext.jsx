@@ -1007,6 +1007,18 @@ export function CartProvider({ children }) {
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>
 }
 
+/**
+ * Kept-alive tabs (MainTabKeepAlive): while `hold` is true the pages below keep seeing the value they last saw, so a
+ * hidden tab is not re-rendered by every cart change (order type on a tab switch, cart updates...).
+ * Each one re-rendered both Home tabs, Dining and Under 250 at once (18 Nov). Released, it passes the live value again.
+ */
+export function HoldCartContext({ hold, children }) {
+  const live = useContext(CartContext)
+  const held = useRef(live)
+  if (!hold) held.current = live
+  return <CartContext.Provider value={held.current}>{children}</CartContext.Provider>
+}
+
 export function useCart() {
   const context = useContext(CartContext)
   if (!context || context._isProvider !== true) {

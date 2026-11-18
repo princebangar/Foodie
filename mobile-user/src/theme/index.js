@@ -5,7 +5,7 @@
 // Usage in a screen:
 //   const useStyles = makeStyles((t) => ({ card: { backgroundColor: t.dark ? colors.zinc[900] : colors.white, padding: sp(4) } }));
 //   const s = useStyles();  // re-created only when light/dark changes
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import * as SystemUI from 'expo-system-ui';
 import { StyleSheet } from 'react-native';
 
@@ -241,6 +241,18 @@ export function ForceLight({ children }) {
 }
 
 export const useTheme = () => useContext(ThemeContext);
+
+/**
+ * Kept-alive tabs (MainTabKeepAlive): while `hold` is true the pages below keep the theme they were drawn with, so a
+ * light/dark switch re-renders only the page on screen (it took ~1 s with every hidden tab re-rendering, 18 Nov). A
+ * hidden tab takes the new theme when it is opened again.
+ */
+export function HoldThemeContext({ hold, children }) {
+  const live = useContext(ThemeContext);
+  const held = useRef(live);
+  if (!hold) held.current = live;
+  return React.createElement(ThemeContext.Provider, { value: held.current }, children);
+}
 
 /** makeStyles((t) => ({...})) -> hook returning StyleSheet styles for the current light/dark theme. */
 export function makeStyles(factory) {

@@ -3,7 +3,8 @@ import { Animated as RNAnimated, Easing as RNEasing, Pressable, View } from 'rea
 import Animated, { Easing, Keyframe } from 'react-native-reanimated';
 import { Image as ExpoImage } from 'expo-image';
 import Svg, { Path } from 'react-native-svg';
-import { MapPin, ChevronDown, Search, Mic, Wallet, Utensils, Soup, Bell } from 'lucide-react-native';
+import { MapPin, ChevronDown, Search, Mic, Wallet, Utensils, Soup, Bell, Sparkles } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Link, useLocation, useNavigate } from '@/lib/router';
 import { useProfile } from "@food/context/ProfileContext";
 import useNotificationInbox from "@food/hooks/useNotificationInbox";
@@ -69,15 +70,20 @@ const exitCenter = new Keyframe({
   100: { opacity: 0, transform: [{ translateX: 0 }, { translateY: 50 }, { rotate: '0deg' }, { scale: 0.5 }] },
 }).duration(800);
 
-// placeholder text swap: y 10 -> 0 in, 0 -> -10 out (0.2 s)
+// placeholder text swap (Prince, 18 Nov: "make it smooth"): the old word moved only 10 px in a 20 px box, so both
+// words sat on top of each other half way. Now each moves a full line (20 px = the box height, clipped), eased, in
+// 380 ms: the old one slides up and out while the new one slides up into place - they never overlap.
+const placeholderEase = Easing.bezier(0.33, 0, 0.2, 1);
 const placeholderIn = new Keyframe({
-  0: { opacity: 0, transform: [{ translateY: 10 }] },
-  100: { opacity: 1, transform: [{ translateY: 0 }] },
-}).duration(200);
+  0: { opacity: 0, transform: [{ translateY: 20 }] },
+  40: { opacity: 1, easing: placeholderEase },
+  100: { opacity: 1, transform: [{ translateY: 0 }], easing: placeholderEase },
+}).duration(380);
 const placeholderOut = new Keyframe({
   0: { opacity: 1, transform: [{ translateY: 0 }] },
-  100: { opacity: 0, transform: [{ translateY: -10 }] },
-}).duration(200);
+  60: { opacity: 0, easing: placeholderEase },
+  100: { opacity: 0, transform: [{ translateY: -20 }], easing: placeholderEase },
+}).duration(380);
 
 /** y: [0, -bob, 0] (or rotate [0, 5, -5, 0]) forever, like the web's repeat: Infinity transitions */
 function useLoop(duration, delay = 0) {
@@ -183,7 +189,8 @@ function RotatingPlaceholder({ placeholders, active, s }) {
   const count = placeholders?.length || 0;
   useEffect(() => {
     if (!active || count < 2) return undefined;
-    const id = setInterval(() => setIndex((prev) => (prev + 1) % count), 2000);
+    // 2.6 s per word: the slide (0.38 s) no longer eats into a short 2 s read
+    const id = setInterval(() => setIndex((prev) => (prev + 1) % count), 2600);
     return () => clearInterval(id);
   }, [active, count]);
   return (
@@ -291,6 +298,7 @@ function FoodHomeHeader({
   const unreadCount = broadcastUnread + localUnread;
 
 
+  /* Old FestBanner rotation (Unsplash dish photos every 4 s) - replaced by DefaultHero (Prince, 18 Nov):
   // FestBanner Logic
   const [imgIndex, setImgIndex] = useState(0);
   const currentPool = vegMode ? bannerImages.veg : bannerImages.nonVeg;
@@ -318,6 +326,8 @@ function FoodHomeHeader({
     currentPool[(imgIndex + 1) % currentPool.length],
     currentPool[(imgIndex + 2) % currentPool.length]
   ];
+
+  */
 
   const areaTitle = (() => {
     const area = location?.area || location?.subLocality || location?.mainTitle || location?.neighborhood;
@@ -486,6 +496,7 @@ function FoodHomeHeader({
         {/* Integrated FestBanner Content */}
         {showBanner && (
           <View style={s.fest}>
+            {/* Old default (FLAVOUR FEST title + bouncing burger / dish photos) - replaced by DefaultHero, Prince 18 Nov:
             {!hideFoodImages && (
               <>
                 <TitlePop key={vegMode ? 'veg-title' : 'nonveg-title'}>
@@ -515,9 +526,74 @@ function FoodHomeHeader({
                 <FoodTrio vegMode={vegMode} imgIndex={imgIndex} displayImages={displayImages} side={64} center={96} gap={sp(5)} bob={12} s={s} />
               </>
             )}
+            */}
+            {!hideFoodImages && <DefaultHero vegMode={vegMode} active={isTabActive} />}
           </View>
         )}
       </View>
+    </View>
+  );
+}
+
+// Default red hero (shown only when the admin has no fest banner). Prince (18 Nov): "make it nicer, smooth and light,
+// keep it red". No photos (nothing to download), three views animated on the native driver: a slow drifting glow,
+// a one-time rise of the headline and a cross-fading tagline. Slightly deeper red towards the bottom.
+const HERO_TAGLINES = {
+  nonVeg: ['Hot & fresh from the kitchen', 'Your favourites, delivered fast', 'Order now, smile in minutes'],
+  veg: ['100% pure veg kitchens', 'Fresh, homely & delicious', 'Your veg favourites, delivered fast'],
+};
+
+function DefaultHero({ vegMode, active }) {
+  const s = useStyles();
+  const rise = useRef(new RNAnimated.Value(0)).current;
+  const drift = useLoop(7000);
+  const fade = useRef(new RNAnimated.Value(1)).current;
+  const [line, setLine] = useState(0);
+  const lines = vegMode ? HERO_TAGLINES.veg : HERO_TAGLINES.nonVeg;
+
+  useEffect(() => {
+    rise.setValue(0);
+    RNAnimated.timing(rise, { toValue: 1, duration: 520, easing: RNEasing.out(RNEasing.cubic), useNativeDriver: true }).start();
+    setLine(0);
+  }, [vegMode, rise]);
+
+  useEffect(() => {
+    if (!active) return undefined;
+    const id = setInterval(() => {
+      RNAnimated.timing(fade, { toValue: 0, duration: 220, useNativeDriver: true }).start(({ finished }) => {
+        if (!finished) return;
+        setLine((prev) => (prev + 1) % lines.length);
+        RNAnimated.timing(fade, { toValue: 1, duration: 280, useNativeDriver: true }).start();
+      });
+    }, 3600);
+    return () => clearInterval(id);
+  }, [active, fade, lines.length]);
+
+  const glowY = drift.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, -10, 0] });
+  const glowX = drift.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 8, 0] });
+  return (
+    <View style={s.hero} pointerEvents="none">
+      <LinearGradient colors={['rgba(90,0,16,0)', 'rgba(90,0,16,0.28)']} style={s.heroShade} />
+      <RNAnimated.View style={[s.glowA, { transform: [{ translateY: glowY }, { translateX: glowX }] }]} />
+      <RNAnimated.View style={[s.glowB, { transform: [{ translateY: RNAnimated.multiply(glowY, -1) }] }]} />
+
+      <RNAnimated.View
+        style={{
+          alignItems: 'center',
+          opacity: rise,
+          transform: [{ translateY: rise.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }],
+        }}
+      >
+        <View style={s.heroChip}>
+          <Sparkles size={13} color="#FFD54A" strokeWidth={2.5} />
+          <Text style={s.heroChipText}>{vegMode ? 'PURE VEG' : "TODAY'S CRAVINGS"}</Text>
+        </View>
+        <Text style={s.heroTitle}>{vegMode ? 'Pure veg,' : 'Cravings?'}</Text>
+        <Text style={[s.heroTitle, s.heroTitleAccent]}>{vegMode ? 'purely delicious.' : 'Sorted in minutes.'}</Text>
+        <RNAnimated.View style={{ opacity: fade, marginTop: sp(3) }}>
+          <Text style={s.heroLine}>{lines[line % lines.length]}</Text>
+        </RNAnimated.View>
+      </RNAnimated.View>
     </View>
   );
 }
@@ -602,9 +678,11 @@ const useStyles = makeStyles(() => ({
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 3,
   },
-  fest: { height: 270, alignItems: 'center', justifyContent: 'center', gap: sp(3.5), marginBottom: sp(1), paddingTop: sp(6) },
+  // Prince (18 Nov): the red top section took half the screen; 270 -> 222 dp (only empty space removed: title, pill and
+  // dishes keep their size), so the filters and the first recommended cards show on the first screen
+  fest: { height: 222, alignItems: 'center', justifyContent: 'center', gap: sp(3), marginBottom: sp(1), paddingTop: sp(2) },
   festTitle: {
-    marginTop: sp(3.5),
+    marginTop: sp(2),
     fontSize: 36,
     lineHeight: 36,
     fontWeight: '900',
@@ -640,6 +718,27 @@ const useStyles = makeStyles(() => ({
     textShadowRadius: 3,
   },
   slotFill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  // DefaultHero
+  hero: { flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center' },
+  heroShade: { position: 'absolute', left: -sp(4), right: -sp(4), top: 0, bottom: -sp(5) },
+  glowA: { position: 'absolute', width: 220, height: 220, borderRadius: 110, backgroundColor: alpha(colors.white, 0.07), top: -40, right: -70 },
+  glowB: { position: 'absolute', width: 160, height: 160, borderRadius: 80, backgroundColor: alpha(colors.white, 0.05), bottom: -30, left: -50 },
+  heroChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: sp(3),
+    paddingVertical: 5,
+    borderRadius: 9999,
+    backgroundColor: alpha(colors.black, 0.18),
+    borderWidth: 1,
+    borderColor: alpha(colors.white, 0.18),
+    marginBottom: sp(3),
+  },
+  heroChipText: { fontSize: 10, lineHeight: 13, fontWeight: '800', letterSpacing: 1.6, color: '#FFE08A' },
+  heroTitle: { fontSize: 30, lineHeight: 36, fontWeight: '900', color: colors.white, textAlign: 'center', letterSpacing: -0.5 },
+  heroTitleAccent: { color: '#FFE08A' },
+  heroLine: { fontSize: 14, lineHeight: 20, fontWeight: '600', color: alpha(colors.white, 0.88), textAlign: 'center' },
   sideImg: { width: '100%', height: '100%', borderRadius: radius['2xl'], borderWidth: 3, borderColor: colors.white, ...shadow['2xl'] },
   centerImg: {
     width: '100%',

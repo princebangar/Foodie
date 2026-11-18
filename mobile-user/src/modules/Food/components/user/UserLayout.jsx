@@ -126,17 +126,24 @@ function SearchOverlayProvider({ children }) {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchValue, setSearchValue] = useState('');
 
-  const openSearch = () => {
+  const openSearch = useCallback(() => {
     setIsSearchOpen(true);
-  };
+  }, []);
 
-  const closeSearch = () => {
+  const closeSearch = useCallback(() => {
     setIsSearchOpen(false);
     setSearchValue('');
-  };
+  }, []);
+
+  // memoized: a new object on every render re-rendered both kept-alive Home tabs (useSearchOverlay) whenever the
+  // providers above re-rendered
+  const value = useMemo(
+    () => ({ isSearchOpen, searchValue, setSearchValue, openSearch, closeSearch }),
+    [isSearchOpen, searchValue, openSearch, closeSearch],
+  );
 
   return (
-    <SearchOverlayContext.Provider value={{ isSearchOpen, searchValue, setSearchValue, openSearch, closeSearch }}>
+    <SearchOverlayContext.Provider value={value}>
       {children}
       {isSearchOpen && <SearchOverlay isOpen={isSearchOpen} onClose={closeSearch} searchValue={searchValue} onSearchChange={setSearchValue} />}
     </SearchOverlayContext.Provider>
