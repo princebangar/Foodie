@@ -1015,6 +1015,9 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
       .join(', ');
 
   const headerTop = insets.top;
+  // Pocket / Profile start right under the header: its real height off the Feed (one row there; a fixed 120 was the
+  // Feed's taller header and left an empty band above the earnings card)
+  const [subHeaderHeight, setSubHeaderHeight] = useState(() => headerTop + 66);
 
   return (
     <View collapsable={false} style={styles.root}>
@@ -1105,7 +1108,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
           visitedTabs.has(key) ? (
             <View
               key={key}
-              style={[StyleSheet.absoluteFill, { paddingTop: key === 'history' ? 0 : headerTop + 120 }, currentTab !== key && styles.tabHidden]}
+              style={[StyleSheet.absoluteFill, { paddingTop: key === 'history' ? 0 : subHeaderHeight }, currentTab !== key && styles.tabHidden]}
               pointerEvents={currentTab === key ? 'auto' : 'none'}
             >
               <LinearGradient pointerEvents="none" colors={[deliveryTheme.pageFrom, deliveryTheme.pageTo]} style={StyleSheet.absoluteFill} />
@@ -1126,6 +1129,11 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
           start={{ x: 0.33, y: 0 }}
           end={{ x: 0.67, y: 1 }}
           style={[styles.header, { paddingTop: headerTop }]}
+          onLayout={(e) => {
+            if (currentTab === 'feed') return;
+            const h = Math.round(e.nativeEvent.layout.height);
+            if (h > 0 && h !== subHeaderHeight) setSubHeaderHeight(h);
+          }}
         >
           <View style={styles.headerRow}>
             <View style={styles.headerLeft}>
