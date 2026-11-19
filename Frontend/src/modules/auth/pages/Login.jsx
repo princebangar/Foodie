@@ -1,7 +1,7 @@
 ﻿import React, { useEffect, useState, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Link, useNavigate } from "react-router-dom"
-import { ArrowLeft, ChevronRight, Phone, Loader2, X, User } from "lucide-react"
+import { ArrowLeft, Phone, Loader2, X, User } from "lucide-react"
 import { toast } from "sonner"
 import { authAPI, userAPI } from "@food/api"
 import { setAuthData } from "@food/utils/auth"
@@ -25,9 +25,9 @@ import {
 const SLIDER_ASPECT = 1350 / 1080
 // Zomato's slider ends at 1348 of 2400 px (56%) of the screen. Taking the same
 // share of the page keeps the form where Zomato has it, even under a browser bar.
-const SLIDER_SCREEN_SHARE = 0.56
+const SLIDER_SCREEN_SHARE = 0.52 // like the app: the sheet also holds "Continue as Guest"
 // Room the form always keeps on short screens; the slider shrinks instead.
-const SHEET_MIN_HEIGHT = 236
+const SHEET_MIN_HEIGHT = 330 // small screens: the banner gives way so the sheet (with the guest button) fits
 
 // Measured from the Zomato login screen (1080 px wide at 2.75 px per dp).
 const LOGIN_FONT = "'Lexend', 'Figtree', sans-serif"
@@ -618,22 +618,6 @@ export default function UnifiedOTPFastLogin() {
           className="absolute h-px w-px opacity-0 pointer-events-none"
         />
 
-        {step === 1 && blockTimer <= 0 && (
-          <button
-            type="button"
-            onClick={() => {
-              localStorage.setItem("user_authenticated", "false");
-              clearSessionData();
-              navigate('/food/user');
-            }}
-            style={{ top: "calc(env(safe-area-inset-top, 0px) + 14px)" }}
-            className="absolute right-4 z-10 flex h-8 items-center gap-0.5 rounded-full border border-white/25 bg-black/40 pl-3.5 pr-2.5 text-[14px] font-medium text-white backdrop-blur-md transition-colors active:bg-black/60"
-          >
-            Skip
-            <ChevronRight className="h-4 w-4 opacity-80" strokeWidth={2.25} aria-hidden="true" />
-          </button>
-        )}
-
         {/* Bottom sheet */}
         <div className="absolute inset-x-0 bottom-0 z-10 flex max-h-full flex-col">
           <div className="pb-2.5">
@@ -700,6 +684,21 @@ export default function UnifiedOTPFastLogin() {
                   >
                     {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Continue"}
                   </button>
+
+                  {/* guest entry (was a "Skip" pill over the banner; moved here like the app) */}
+                  {blockTimer <= 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        localStorage.setItem("user_authenticated", "false")
+                        clearSessionData()
+                        navigate("/food/user")
+                      }}
+                      className="mt-3 flex h-[52px] w-full items-center justify-center rounded-lg border-[1.5px] border-[#E23744] text-[18px] font-normal text-[#E23744] transition-colors active:bg-[#E23744]/10"
+                    >
+                      Continue as Guest
+                    </button>
+                  )}
                 </motion.form>
               ) : null}
             </AnimatePresence>

@@ -1,7 +1,6 @@
-﻿import { useNavigate } from "react-router-dom"
+import { useNavigate } from "react-router-dom"
 import { useState, useEffect } from "react"
 import { ArrowLeft, Lock, Loader2, Mail, Phone, MessageSquare, Clock, ShieldCheck, TicketCheck, ChevronRight } from "lucide-react"
-import { motion } from "framer-motion"
 import { toast } from "sonner"
 import AnimatedPage from "@food/components/user/AnimatedPage"
 import { Button } from "@food/components/ui/button"
@@ -104,8 +103,9 @@ export default function CMSPage({
 
   return (
     <AnimatedPage className="min-h-screen bg-white dark:bg-[#0a0a0a] pb-10">
-      {/* Premium Sticky Header */}
-      <div className="sticky top-0 z-50 bg-white/80 dark:bg-[#0a0a0a]/80 backdrop-blur-xl border-b border-gray-100 dark:border-gray-900">
+      {/* Sticky header: solid white. A backdrop-blur over the long policy text had to be redrawn on every scroll
+          frame, so the page scrolled in jerks on phones. */}
+      <div className="sticky top-0 z-50 bg-white dark:bg-[#0a0a0a] border-b border-gray-100 dark:border-gray-900">
         <div className="max-w-4xl mx-auto px-4 h-16 md:h-20 flex items-center gap-4">
           <button
             onClick={handleBack}
@@ -124,9 +124,7 @@ export default function CMSPage({
       </div>
 
       <div className="max-w-4xl mx-auto px-4 py-8">
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
+        <div
           className="bg-white dark:bg-[#111] rounded-[2rem] p-6 md:p-10 shadow-sm border border-gray-50 dark:border-gray-900"
         >
           {/* Support Contact Cards */}
@@ -324,7 +322,7 @@ export default function CMSPage({
               </div>
             </div>
           )}
-          </motion.div>
+        </div>
 
         <p className="text-center mt-10 text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] leading-relaxed">
           Last updated: {new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}{" "}

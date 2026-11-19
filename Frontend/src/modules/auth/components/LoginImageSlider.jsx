@@ -113,7 +113,7 @@ export function useLoginImageSlider(appType) {
   }
 }
 
-export function LoginImageSlider({ slider, height }) {
+export function LoginImageSlider({ slider, height, fallbackColor = "#E23744" }) {
   const { images, position, step, settle, setPaused, prefersReducedMotion } = slider
   const count = images.length
   const looping = count > 1
@@ -164,9 +164,9 @@ export function LoginImageSlider({ slider, height }) {
       className="absolute inset-x-0 top-0 overflow-hidden"
       style={{ height }}
     >
-      {/* Plain brand red behind the slides; only seen on the very first open,
+      {/* Plain brand colour behind the slides; only seen on the very first open,
           before the admin images have ever loaded. */}
-      <div className="absolute inset-0 bg-[#E23744]" />
+      <div className="absolute inset-0" style={{ backgroundColor: fallbackColor }} />
 
       {count > 0 && (
         <motion.div

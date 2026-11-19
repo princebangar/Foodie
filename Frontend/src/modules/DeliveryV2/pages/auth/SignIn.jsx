@@ -1,12 +1,18 @@
-﻿import { useState, useEffect, useRef } from "react"
-import { useNavigate, Link, useLocation } from "react-router-dom"
+import { useState, useEffect, useRef } from "react"
+import { useNavigate, useLocation } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
-import { Loader2, Pencil, X, ShieldCheck } from "lucide-react"
+import { X, ShieldCheck } from "lucide-react"
 import { toast } from "sonner"
 import { deliveryAPI } from "@food/api"
 import { setAuthData as storeAuthData, clearModuleAuth } from "@food/utils/auth"
 import { collectFcmTokenFast, persistModuleFcmToken, finalizeDeliveryPendingSubmission, prefetchModuleFcmToken } from "@food/utils/firebaseMessaging"
 import { getUserFacingApiError, showUserFacingApiError } from "@/shared/utils/apiError"
+import { LoginNumberScreen, LoginOtpScreen, LoginPrimaryButton } from "@/modules/auth/components/PartnerLogin"
+
+// Same look as the Delivery app login (admin images slider + white sheet, then the white "OTP Verification" page).
+const ACCENT = "#15498B"
+const ACCENT_PRESSED = "#0F3A70"
+const LOGIN_FONT = "'Nunito Sans', 'Poppins', sans-serif"
 
 const DEFAULT_COUNTRY_CODE = "+91"
 
@@ -586,7 +592,7 @@ export default function DeliverySignIn() {
           }
         })
         setOtp(newOtp)
-        inputRefs.current[Math.min(3, index + digits.length)]?.focus()
+        afterOtpUpdate(newOtp, Math.min(3, index + digits.length))
       }
       return
     }
@@ -597,8 +603,15 @@ export default function DeliverySignIn() {
     newOtp[index] = value
     setOtp(newOtp)
 
-    if (value && index < 3) {
-      inputRefs.current[index + 1]?.focus()
+    if (value) afterOtpUpdate(newOtp, index < 3 ? index + 1 : null)
+  }
+
+  // last digit in: verify straight away (like the app)
+  const afterOtpUpdate = (newOtp, nextIndex) => {
+    if (newOtp.every((digit) => digit !== "")) {
+      handleVerify(newOtp.join(""))
+    } else if (nextIndex != null) {
+      inputRefs.current[nextIndex]?.focus()
     }
   }
 
@@ -638,13 +651,7 @@ export default function DeliverySignIn() {
       if (i < 4) newOtp[i] = digit
     })
     setOtp(newOtp)
-    inputRefs.current[Math.min(digits.length, 3)]?.focus()
-  }
-
-  const formatResendTimer = (seconds) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`
+    afterOtpUpdate(newOtp, Math.min(digits.length, 3))
   }
 
   const getPhoneNumber = () => {
@@ -656,53 +663,13 @@ export default function DeliverySignIn() {
     return cleaned
   }
 
-  const isOtpComplete = otp.every((digit) => digit !== "")
-
   const showLoginStep = !isOtpStep || instantAuthTransition
 
-  const authStepTransition = instantAuthTransition
-    ? { duration: 0 }
-    : { duration: 0.3 }
-
-  // When an input is focused the mobile soft-keyboard opens and shrinks the
-  // viewport. Scroll the focused field into the centre of the remaining space
-  // so the submit button / logo never get hidden behind the keyboard.
-  const handleInputFocusScroll = (e) => {
-    const el = e.currentTarget
-    setTimeout(() => {
-      el?.scrollIntoView({ behavior: "smooth", block: "center" })
-    }, 300)
-  }
+  const otpPhoneLabel = `+91-${String(authData?.phone || phone).replace(/\D/g, "").slice(-10)}`
 
   return (
-    <div className="min-h-[100dvh] bg-white dark:bg-[#0a0a0a] flex flex-col relative overflow-hidden font-['Poppins']">
-      {/* Top Wave */}
-      <div className="absolute top-0 left-0 w-full h-[40vh] pointer-events-none z-0 transform scale-[1.05] origin-center">
-        <svg viewBox="0 0 1440 320" className="w-full h-full block" preserveAspectRatio="none" overflow="visible">
-          <defs>
-            <linearGradient id="topBlueGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#0E4B9C" />
-              <stop offset="100%" stopColor="#021024" />
-            </linearGradient>
-          </defs>
-          <path fill="url(#topBlueGrad)" d="M -50,-50 L -50,280 C 200,100 800,100 1490,100 L 1490,-50 Z" filter="drop-shadow(0px 5px 15px rgba(0,0,0,0.15))" />
-        </svg>
-      </div>
-
-      {/* Bottom Wave */}
-      <div className="absolute bottom-0 left-0 w-full h-[50vh] pointer-events-none z-0 transform scale-[1.05] origin-center">
-        <svg viewBox="0 0 1440 320" className="w-full h-full block" preserveAspectRatio="none" overflow="visible">
-          <defs>
-            <linearGradient id="botBlueGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#0E4B9C" />
-              <stop offset="100%" stopColor="#021024" />
-            </linearGradient>
-          </defs>
-          <path fill="url(#botBlueGrad)" d="M -50,370 L -50,220 C 640,220 1240,220 1490,40 L 1490,370 Z" filter="drop-shadow(0px -5px 15px rgba(0,0,0,0.15))" />
-        </svg>
-      </div>
-
-      {/* Hidden keyboard-keeper: focused on the "Log in" tap so iOS keeps the
+    <>
+      {/* Hidden keyboard-keeper: focused on the "Continue" tap so iOS keeps the
           soft-keyboard open while transitioning to the OTP step. */}
       <input
         ref={focusKeeperRef}
@@ -711,308 +678,103 @@ export default function DeliverySignIn() {
         tabIndex={-1}
         aria-label="Keyboard focus keeper"
         readOnly
-        className="absolute opacity-0 w-px h-px -z-10 pointer-events-none"
+        className="fixed left-0 top-0 h-px w-px opacity-0 pointer-events-none"
       />
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 py-12 pb-24 relative z-10 overflow-y-auto">
-        <div className="w-full max-w-sm flex flex-col relative -top-10 my-auto">
-
-          {/* Logo & Header */}
-          <div className="mb-5 text-center flex flex-col items-center">
-            <img
-              src="/logo.webp"
-              alt="Foodie Logo"
-              className="h-14 w-auto mb-3 rounded-xl object-contain shadow-md"
-            />
-            <h2 className="text-[25px] font-extrabold bg-gradient-to-r from-[#0E4B9C] to-[#06336B] dark:from-blue-400 dark:to-blue-600 bg-clip-text text-transparent tracking-tight font-['Outfit'] pb-0.5">
-              Delivery Partner
-            </h2>
-            <div className="text-[13.5px] text-slate-600 dark:text-slate-350 font-['Outfit'] font-medium tracking-wide leading-relaxed max-w-[310px] text-center px-4 mt-3">
-              {showLoginStep ? (
-                "Enter your registered mobile number to start earning"
-              ) : showNameInput ? (
-                "You're almost done! Please tell us your name to complete registration."
-              ) : (
-                <div className="text-[13px] text-slate-500/90 dark:text-slate-400/90 font-['Outfit'] font-semibold tracking-[0.015em] leading-relaxed w-full max-w-none text-center mt-2 flex items-center justify-center gap-1.5 whitespace-nowrap">
-                  <span>We've sent a code to {getPhoneNumber()}</span>
-                  <button
-                    onClick={handleBackToLogin}
-                    className="p-1.5 ml-1 bg-gradient-to-r from-[#0E4B9C] to-[#021024] hover:from-[#1157b5] hover:to-[#041630] rounded-[10px] text-white shadow-md shadow-[#0E4B9C]/20 transition-all hover:scale-105 active:scale-95"
-                    aria-label="Edit phone number"
-                  >
-                    <Pencil className="w-3.5 h-3.5" strokeWidth={2.5} />
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="relative">
-            <AnimatePresence mode="wait">
-              {showLoginStep ? (
-                <motion.form
-                  key="phone-form"
-                  initial={instantAuthTransition ? false : { opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={instantAuthTransition ? undefined : { opacity: 0, x: 20 }}
-                  transition={authStepTransition}
-                  onSubmit={handleSendOTP}
-                  className="space-y-6"
-                >
-                  <div className="relative group">
-                    <div className="absolute inset-y-0 left-6 flex items-center pointer-events-none">
-                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400 pr-3 border-r border-gray-300 dark:border-gray-600">+91</span>
-                    </div>
-                    <input
-                      type="tel"
-                      required
-                      autoFocus
-                      onFocus={handleInputFocusScroll}
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                      maxLength={10}
-                      className="block w-full pl-20 pr-6 py-3.5 bg-gray-50 dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 shadow-sm text-gray-900 dark:text-white rounded-full outline-none transition-all duration-300 placeholder:text-gray-400 font-medium text-base focus:bg-white dark:focus:bg-gray-900 focus:border-[#0E4B9C] focus:ring-4 focus:ring-[#0E4B9C]/10 hover:border-gray-400"
-                      placeholder="Mobile number"
-                    />
+      {showLoginStep ? (
+        <LoginNumberScreen
+          appType="delivery"
+          phone={phone}
+          onPhoneChange={setPhone}
+          onContinue={() => handleSendOTP()}
+          loading={loading}
+          accent={ACCENT}
+          accentPressed={ACCENT_PRESSED}
+          fontFamily={LOGIN_FONT}
+          legalFrom="/food/delivery/login"
+          onLegalClick={clearPersistedLoginPhone}
+          legalLinks={[
+            { to: "/food/delivery/terms", label: "Terms of Service" },
+            { to: "/food/delivery/privacy", label: "Privacy Policy" },
+            { to: "/food/delivery/help/content", label: "Support" },
+          ]}
+        />
+      ) : (
+        <LoginOtpScreen
+          phoneLabel={otpPhoneLabel}
+          otp={otp}
+          inputRefs={inputRefs}
+          onOtpChange={handleChange}
+          onOtpKeyDown={handleKeyDown}
+          onOtpPaste={handlePaste}
+          loading={loading}
+          otpError={error}
+          blockTimer={blockTimer}
+          resendTimer={resendTimer}
+          onResend={handleResend}
+          accent={ACCENT}
+          fontFamily={LOGIN_FONT}
+          onBack={handleBackToLogin}
+        >
+          {pendingMessage ? (
+            <div className={`mx-3 mt-8 space-y-4 rounded-2xl border p-5 text-center ${isRejected ? "border-red-200 bg-red-50" : "border-amber-200 bg-amber-50"}`}>
+              <div className="space-y-2">
+                <p className={`text-[15px] font-extrabold uppercase tracking-wider ${isRejected ? "text-red-700" : "text-amber-700"}`}>
+                  {isRejected ? "Application Rejected" : "Pending Verification"}
+                </p>
+                <p className={`text-sm font-medium leading-relaxed ${isRejected ? "text-red-600/90" : "text-amber-600/90"}`}>
+                  {pendingMessage}
+                </p>
+                {isRejected && rejectionReason ? (
+                  <div className="mt-3 rounded-xl border border-red-100 bg-white/70 p-4">
+                    <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-red-600">Reason</p>
+                    <p className="text-sm font-medium italic text-red-800">"{rejectionReason}"</p>
                   </div>
-
-                  <button
-                    type="submit"
-                    disabled={loading || phone.length < 10}
-                    className="w-full py-3.5 bg-gradient-to-r from-[#0E4B9C] to-[#021024] hover:from-[#1157b5] hover:to-[#041630] disabled:opacity-50 text-white rounded-full font-medium text-base shadow-[0_8px_20px_rgba(14,75,156,0.3)] disabled:shadow-none transition-all active:scale-[0.98] flex items-center justify-center gap-2"
-                  >
-                    {loading ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : (
-                      "Log in"
-                    )}
-                  </button>
-                </motion.form>
-              ) : (
-                <motion.div
-                  key="otp-form"
-                  initial={instantAuthTransition ? false : { opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={instantAuthTransition ? undefined : { opacity: 0, x: -20 }}
-                  transition={authStepTransition}
-                  className="w-full flex flex-col"
-                >
-                  <div className="relative">
-                    {/* Pending/Rejected Screen */}
-                    {pendingMessage && (
-                      <div className={`rounded-3xl border p-6 text-center space-y-5 shadow-lg ${isRejected ? "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-900/50" : "bg-amber-50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-900/50"}`}>
-                        <div className="space-y-2">
-                          <p className={`text-base font-extrabold uppercase tracking-wider ${isRejected ? "text-red-700 dark:text-red-400" : "text-amber-700 dark:text-amber-400"}`}>
-                            {isRejected ? "Application Rejected" : "Pending Verification"}
-                          </p>
-                          <p className={`text-sm font-medium leading-relaxed ${isRejected ? "text-red-600/90 dark:text-red-300/80" : "text-amber-600/90 dark:text-amber-300/80"}`}>
-                            {pendingMessage}
-                          </p>
-                          {isRejected && rejectionReason && (
-                            <div className="mt-3 p-4 bg-white/70 dark:bg-[#1a1a1a]/70 rounded-2xl border border-red-100 dark:border-red-900/30">
-                              <p className="text-[10px] font-black text-red-600 uppercase tracking-widest mb-1">Reason</p>
-                              <p className="text-sm text-red-800 dark:text-red-300 italic font-medium">"{rejectionReason}"</p>
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="flex flex-col gap-3 pt-2">
-                          {isRejected && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const pVal = authData?.phone || ""
-                                const digits = String(pVal).replace(/\D/g, "")
-                                sessionStorage.setItem("deliveryNeedsRegistration", "true")
-                                const details = {
-                                  name: "",
-                                  phone: digits.slice(-10),
-                                  countryCode: "+91",
-                                }
-                                sessionStorage.setItem("deliverySignupDetails", JSON.stringify(details))
-                                navigate("/food/delivery/signup/details", { replace: true })
-                              }}
-                              className="w-full py-3.5 bg-gradient-to-r from-[#0E4B9C] to-[#021024] hover:from-[#1157b5] hover:to-[#041630] text-white rounded-full font-semibold text-base shadow-[0_8px_20px_rgba(14,75,156,0.2)] transition-all active:scale-[0.98]"
-                            >
-                              Re-apply Now
-                            </button>
-                          )}
-                          
-                          <button
-                            type="button"
-                            onClick={handleBackToLogin}
-                            className="w-full py-3.5 bg-gradient-to-r from-[#0E4B9C] to-[#021024] hover:from-[#1157b5] hover:to-[#041630] text-white rounded-full font-medium text-base shadow-[0_8px_20px_rgba(14,75,156,0.3)] transition-all active:scale-[0.98] flex items-center justify-center"
-                          >
-                            Back to login
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* OTP fields */}
-                    {!showNameInput && !pendingMessage && (
-                      <form onSubmit={(e) => { e.preventDefault(); handleVerify(); }} className="space-y-6">
-                        {error && (
-                          <motion.div
-                            initial={{ opacity: 0, y: -6 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="text-red-600 dark:text-red-500 text-[15px] font-bold text-center tracking-wide mb-4 mt-2"
-                          >
-                            {error}
-                          </motion.div>
-                        )}
-
-                        <div className="flex justify-between gap-3">
-                          {[0, 1, 2, 3].map((index) => (
-                            <input
-                              key={index}
-                              ref={(el) => (inputRefs.current[index] = el)}
-                              type="tel"
-                              inputMode="numeric"
-                              required
-                              disabled={loading || blockTimer > 0}
-                              autoFocus={index === 0}
-                              value={otp[index]}
-                              onChange={(e) => handleChange(index, e.target.value)}
-                              onKeyDown={(e) => handleKeyDown(index, e)}
-                              onPaste={index === 0 ? handlePaste : undefined}
-                              className={`w-14 h-14 sm:w-16 sm:h-16 text-center text-2xl font-bold bg-gray-50 dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 shadow-sm rounded-[20px] outline-none transition-all duration-300 text-gray-900 dark:text-white focus:bg-white dark:focus:bg-gray-900 focus:border-[#0E4B9C] focus:ring-4 focus:ring-[#0E4B9C]/10 hover:border-gray-400 ${blockTimer > 0 ? "opacity-50 cursor-not-allowed border-red-400 bg-red-50 text-red-800" : ""}`}
-                              placeholder="•"
-                            />
-                          ))}
-                        </div>
-
-                        <div className="flex flex-col items-center gap-4">
-                          <div className="flex items-center gap-2 text-xs font-semibold">
-                            {blockTimer > 0 ? (
-                              <span className="text-gray-400 uppercase tracking-wider font-extrabold">Resend SMS</span>
-                            ) : resendTimer > 0 ? (
-                              <span className="text-gray-400 font-extrabold">Resend SMS in <span className="text-slate-800 dark:text-slate-200 font-black">{formatResendTimer(resendTimer)}</span></span>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={handleResend}
-                                className="text-slate-800 dark:text-slate-200 hover:text-slate-950 dark:hover:text-white hover:underline font-extrabold"
-                              >
-                                Didn't receive SMS? Resend SMS
-                              </button>
-                            )}
-                          </div>
-                        </div>
-
-                        <button
-                          type="submit"
-                          disabled={loading || !isOtpComplete || blockTimer > 0}
-                          className="w-full py-3.5 bg-gradient-to-r from-[#0E4B9C] to-[#021024] hover:from-[#1157b5] hover:to-[#041630] disabled:opacity-50 text-white rounded-full font-medium text-base shadow-[0_8px_20px_rgba(14,75,156,0.3)] disabled:shadow-none transition-all active:scale-[0.98] flex items-center justify-center gap-2 mt-4"
-                        >
-                          {loading ? (
-                            <span className="flex items-center gap-2">
-                              <Loader2 className="w-5 h-5 animate-spin" />
-                              Verifying...
-                            </span>
-                          ) : (
-                            "Verify & Continue"
-                          )}
-                        </button>
-
-                        {blockTimer > 0 && (
-                          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center w-fit mx-auto px-6 py-2.5 bg-blue-50 dark:bg-blue-950/20 rounded-xl border border-blue-100 dark:border-blue-900/50 mt-4">
-                            <p className="text-[11px] font-bold text-[#0E4B9C] uppercase tracking-wider">
-                              Too many failed attempts
-                            </p>
-                            <p className="text-sm font-bold text-[#0E4B9C]">
-                              Try again after {Math.floor((blockTimer - 1) / 60)}:{String((blockTimer - 1) % 60).padStart(2, '0')}
-                            </p>
-                          </motion.div>
-                        )}
-                      </form>
-                    )}
-
-                    {/* Name field */}
-                    {showNameInput && (
-                      <div className="space-y-6">
-                        <div className="space-y-2">
-                          <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 text-left pl-3">
-                            Full name
-                          </label>
-                          <input
-                            type="text"
-                            value={name}
-                            onChange={(e) => {
-                              setName(e.target.value)
-                              if (nameError) setNameError("")
-                            }}
-                            disabled={loading}
-                            placeholder="Enter your name"
-                            className={`block w-full px-6 py-3.5 bg-gray-50 dark:bg-gray-800 border-2 shadow-sm text-gray-900 dark:text-white rounded-full outline-none transition-all duration-300 placeholder:text-gray-400 font-medium text-base focus:bg-white dark:focus:bg-gray-900 focus:border-[#0E4B9C] focus:ring-4 focus:ring-[#0E4B9C]/10 ${nameError ? "border-red-500" : "border-gray-300 dark:border-gray-600"}`}
-                          />
-                          {nameError && (
-                            <p className="text-xs text-red-500 text-left pl-3">
-                              {nameError}
-                            </p>
-                          )}
-                        </div>
-
-                        <button
-                          onClick={handleSubmitName}
-                          disabled={loading || !name.trim()}
-                          className="w-full py-3.5 bg-gradient-to-r from-[#0E4B9C] to-[#021024] hover:from-[#1157b5] hover:to-[#041630] disabled:opacity-50 text-white rounded-full font-medium text-base shadow-[0_8px_20px_rgba(14,75,156,0.3)] disabled:shadow-none transition-all active:scale-[0.98] flex items-center justify-center gap-2 mt-4"
-                        >
-                          {loading ? (
-                            <span className="flex items-center gap-2">
-                              <Loader2 className="w-5 h-5 animate-spin" />
-                              Continuing...
-                            </span>
-                          ) : (
-                            "Continue"
-                          )}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-          {/* Footer Info - only on login step, not OTP */}
-          {!isOtpStep && (
-            <div className="mt-8 text-center">
-              <p className="text-[11px] text-gray-400/80 font-medium leading-relaxed max-w-[320px] mx-auto">
-                By continuing, you agree to our <br />
-                <Link
-                  to="/food/delivery/terms"
-                  state={{ from: "/food/delivery/login" }}
-                  onClick={clearPersistedLoginPhone}
-                  className="text-gray-400 hover:text-[#0E4B9C] transition-colors uppercase tracking-wider font-semibold"
-                >
-                  TERMS
-                </Link>
-                <span className="mx-2 text-gray-400/80 font-bold">•</span>
-                <Link
-                  to="/food/delivery/privacy"
-                  state={{ from: "/food/delivery/login" }}
-                  onClick={clearPersistedLoginPhone}
-                  className="text-gray-400 hover:text-[#0E4B9C] transition-colors uppercase tracking-wider font-semibold"
-                >
-                  PRIVACY
-                </Link>
-                <span className="mx-2 text-gray-400/80 font-bold">•</span>
-                <Link
-                  to="/food/delivery/help/content"
-                  state={{ from: "/food/delivery/login" }}
-                  onClick={clearPersistedLoginPhone}
-                  className="text-gray-400 hover:text-[#0E4B9C] transition-colors uppercase tracking-wider font-semibold"
-                >
-                  SUPPORT
-                </Link>
-              </p>
+                ) : null}
+              </div>
+              {isRejected ? (
+                <LoginPrimaryButton
+                  accent={ACCENT}
+                  accentPressed={ACCENT_PRESSED}
+                  label="Re-apply Now"
+                  onClick={() => {
+                    const digits = String(authData?.phone || "").replace(/\D/g, "")
+                    sessionStorage.setItem("deliveryNeedsRegistration", "true")
+                    sessionStorage.setItem("deliverySignupDetails", JSON.stringify({ name: "", phone: digits.slice(-10), countryCode: "+91" }))
+                    navigate("/food/delivery/signup/details", { replace: true })
+                  }}
+                />
+              ) : null}
             </div>
-          )}
-
-        </div>
-      </div>
+          ) : showNameInput ? (
+            <div className="mt-8 space-y-4 px-3">
+              <label className="block text-[15px] font-semibold text-[#1C1C1C]">Full name</label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => {
+                  setName(e.target.value)
+                  if (nameError) setNameError("")
+                }}
+                disabled={loading}
+                placeholder="Enter your name"
+                style={{ caretColor: ACCENT }}
+                className={`h-12 w-full rounded-lg border bg-white px-4 text-[17px] text-[#1C1C1C] shadow-[0_1px_2px_rgba(28,28,28,0.12)] outline-none placeholder:text-[#AFB4C0] ${nameError ? "border-red-500" : "border-[#D0D4DC]"}`}
+              />
+              {nameError ? <p className="text-[13px] text-red-500">{nameError}</p> : null}
+              {error ? <p className="text-[13px] text-red-500">{error}</p> : null}
+              <LoginPrimaryButton
+                accent={ACCENT}
+                accentPressed={ACCENT_PRESSED}
+                label="Continue"
+                onClick={handleSubmitName}
+                loading={loading}
+                disabled={!name.trim()}
+              />
+            </div>
+          ) : null}
+        </LoginOtpScreen>
+      )}
 
       {/* Restore/New Account Popup */}
       <AnimatePresence>
@@ -1075,6 +837,6 @@ export default function DeliverySignIn() {
           </div>
         )}
       </AnimatePresence>
-    </div>
+    </>
   )
 }

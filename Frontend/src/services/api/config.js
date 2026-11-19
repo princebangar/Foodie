@@ -38,8 +38,13 @@ export const API_ENDPOINTS = {
     // CMS pages (admin auth + public)
     TERMS: "/food/admin/pages-social-media/terms",
     TERMS_PUBLIC: "/food/pages/terms",
+    // the Restaurant / Delivery apps (and their web pages) show their own policy pages
+    TERMS_RESTAURANT_PUBLIC: "/food/pages/terms_restaurant",
+    TERMS_DELIVERY_PUBLIC: "/food/pages/terms_delivery",
     PRIVACY: "/food/admin/pages-social-media/privacy",
     PRIVACY_PUBLIC: "/food/pages/privacy",
+    PRIVACY_RESTAURANT_PUBLIC: "/food/pages/privacy_restaurant",
+    PRIVACY_DELIVERY_PUBLIC: "/food/pages/privacy_delivery",
     ABOUT: "/food/admin/pages-social-media/about",
     ABOUT_PUBLIC: "/food/pages/about",
     REFUND: "/food/admin/pages-social-media/refund",

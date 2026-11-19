@@ -307,8 +307,19 @@ const styles = StyleSheet.create({
   sheet: { flexGrow: 1, backgroundColor: colors.white, paddingHorizontal: 24, paddingTop: 16 },
   title: { marginBottom: 16, textAlign: "center", fontSize: 16, lineHeight: 23, fontWeight: "500", color: "#596378" },
   field: loginStyles.field,
-  prefix: { fontSize: 18, lineHeight: 24, color: "#1C1C1C" },
-  phoneInput: { flex: 1, minWidth: 0, fontSize: 18, lineHeight: 24, color: "#1C1C1C", paddingVertical: 0 },
+  prefix: { fontSize: 18, color: "#1C1C1C", includeFontPadding: false, textAlignVertical: "center" },
+  // Android: a lineHeight on a TextInput puts the placeholder above the middle (with Poppins it sat higher than "+91");
+  // no lineHeight + no font padding + vertical centring puts the text and the placeholder on the box's middle line
+  phoneInput: {
+    flex: 1,
+    minWidth: 0,
+    height: "100%",
+    fontSize: 18,
+    color: "#1C1C1C",
+    paddingVertical: 0,
+    includeFontPadding: false,
+    textAlignVertical: "center",
+  },
   phoneError: { marginTop: 8, fontSize: 13, lineHeight: 18, fontWeight: "500", color: colors.red[600] },
   primary: { height: 52, width: "100%", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 8, backgroundColor: LOGIN_RED },
   primaryText: { fontSize: 20, lineHeight: 26, color: colors.white },
