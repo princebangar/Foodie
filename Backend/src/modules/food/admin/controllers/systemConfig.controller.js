@@ -1,6 +1,7 @@
 import { FoodSystemConfig } from '../models/systemConfig.model.js';
 import { ValidationError, NotFoundError } from '../../../../core/auth/errors.js';
 import { invalidateMaintenanceModeCache } from '../services/maintenanceMode.service.js';
+import { DIAMOND_FEATURE_KEY, setDiamondFeatureCache } from '../../diamond/services/diamond.service.js';
 
 // Customization toggles live in FoodSystemConfig as individual keys.
 const CUSTOMIZATION_TOGGLES = [
@@ -58,6 +59,11 @@ const CUSTOMIZATION_TOGGLES = [
         key: 'delivery_refer_earn_enabled',
         defaultValue: true,
         description: 'Shows Refer & Earn in the delivery partner app. When OFF it is hidden and no referral rewards are credited.'
+    },
+    {
+        key: DIAMOND_FEATURE_KEY,
+        defaultValue: true,
+        description: 'Foodie Diamond membership in the user app (Join button, member strip, cart savings, discounts). When OFF it is hidden everywhere and no Diamond discount is applied.'
     },
     {
         key: 'driver_simulation_enabled',
@@ -131,6 +137,8 @@ export async function updateCustomizationSettings(req, res) {
     if (maintenanceUpdate) {
         invalidateMaintenanceModeCache(maintenanceUpdate.value === true);
     }
+    const diamondUpdate = updates.find((u) => u.key === DIAMOND_FEATURE_KEY);
+    if (diamondUpdate) setDiamondFeatureCache(diamondUpdate.value === true);
 
     const keys = getCustomizationAllowlist();
     const docs = await FoodSystemConfig.find({ key: { $in: keys } }).lean();

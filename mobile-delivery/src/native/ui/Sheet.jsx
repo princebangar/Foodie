@@ -48,14 +48,15 @@ function useMountedWhileOpen(open, ms, animateOut = true) {
   return [mounted, anim, onShow];
 }
 
-export function Sheet({ open, onClose, children, style, backdropOpacity = 0.5, dismissible = true }) {
+// onBack: what Android Back does when it is not onClose (e.g. a sheet whose backdrop must not close it, but Back minimizes)
+export function Sheet({ open, onClose, onBack, children, style, backdropOpacity = 0.5, dismissible = true }) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const [mounted, anim, onShow] = useMountedWhileOpen(open, 260);
   if (!mounted) return null;
   const h = Dimensions.get('window').height;
   return (
-    <Modal visible transparent statusBarTranslucent navigationBarTranslucent animationType="none" onShow={onShow} onRequestClose={() => dismissible && onClose?.()}>
+    <Modal visible transparent statusBarTranslucent navigationBarTranslucent animationType="none" onShow={onShow} onRequestClose={() => (onBack ? onBack() : dismissible && onClose?.())}>
       <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: alpha('#000000', backdropOpacity), opacity: anim }]}>
           <Pressable style={styles.fill} onPress={() => dismissible && onClose?.()} />

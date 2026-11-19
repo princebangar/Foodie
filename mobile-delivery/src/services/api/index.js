@@ -2203,6 +2203,13 @@ export const deliveryAPI = {
         contextModule: "delivery",
       },
     ),
+  /** PATCH /food/delivery/orders/:orderId/alert-mute — the order's reminder pushes skip this rider while muted. */
+  setOrderAlertMuted: (orderId, muted) =>
+    apiClient.patch(
+      `/food/delivery/orders/${String(orderId)}/alert-mute`,
+      { muted: Boolean(muted) },
+      { contextModule: "delivery" },
+    ),
   /**
    * PATCH /food/delivery/orders/:orderId/reached-pickup
    * Marks "reached pickup" (arrival at restaurant) in backend order deliveryState.

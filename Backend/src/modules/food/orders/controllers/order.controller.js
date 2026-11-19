@@ -264,6 +264,17 @@ export async function rejectOrderDeliveryController(req, res, next) {
     }
 }
 
+export async function setOrderAlertMutedDeliveryController(req, res, next) {
+    try {
+        const deliveryPartnerId = req.user?.userId;
+        const orderId = req.params.orderId;
+        const result = await orderService.setDeliveryOrderAlertMuted(orderId, deliveryPartnerId, req.body?.muted === true);
+        return sendResponse(res, 200, result.muted ? 'Order alert muted' : 'Order alert unmuted', result);
+    } catch (err) {
+        next(err);
+    }
+}
+
 export async function confirmReachedPickupDeliveryController(req, res, next) {
     try {
         const deliveryPartnerId = req.user?.userId;

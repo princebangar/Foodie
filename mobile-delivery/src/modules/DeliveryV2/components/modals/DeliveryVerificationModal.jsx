@@ -6,7 +6,7 @@
 // (useKeyboardOffset) so the four code boxes stay above it while typing. The QR popup is a Dialog (web: fixed inset-0
 // bg-black/80).
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { ActivityIndicator, Animated, Dimensions, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Animated, Dimensions, Easing, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   ShieldCheck, DollarSign, CheckCircle2,
@@ -49,12 +49,19 @@ const StepPanel = ({ onClose, children, liftWithKeyboard = false }) => {
   useEffect(() => {
     Animated.spring(slide, { toValue: 0, damping: 25, stiffness: 200, useNativeDriver: true }).start();
   }, [slide]);
+  // Riding on the keyboard: the panel moves up smoothly with it (it jumped up in one frame when the code box opened
+  // the keyboard). The layer stays above the bottom bar; the lift is a transform.
+  const liftBy = bottom - navBottom;
+  const lift = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(lift, { toValue: -liftBy, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+  }, [lift, liftBy]);
   const maxHeight = Dimensions.get('window').height - bottom - 28; // web: max-h-[calc(100dvh-132px)]
 
   return (
-    <View style={[styles.stepLayer, { bottom }]} pointerEvents="box-none">
+    <View style={[styles.stepLayer, { bottom: navBottom }]} pointerEvents="box-none">
       <Backdrop onClose={onClose} />
-      <Animated.View style={[styles.sheet, { maxHeight, transform: [{ translateY: slide }] }]}>
+      <Animated.View style={[styles.sheet, { maxHeight, transform: [{ translateY: Animated.add(slide, lift) }] }]}>
         <ScrollView contentContainerStyle={styles.sheetContent} bounces={false} keyboardShouldPersistTaps="handled">
           {children}
         </ScrollView>
@@ -477,7 +484,8 @@ export const DeliveryVerificationModal = ({ order, onComplete, onClose }) => {
 
 const styles = StyleSheet.create({
   backdrop: { backgroundColor: alpha(colors.black, 0.4) },
-  stepLayer: { position: 'absolute', left: 0, right: 0, top: 0, justifyContent: 'flex-end', alignItems: 'center' },
+  // above the Feed's drop card / VERIFY & COMPLETE button (zIndex 120)
+  stepLayer: { position: 'absolute', left: 0, right: 0, top: 0, justifyContent: 'flex-end', alignItems: 'center', zIndex: 130, elevation: 30 },
   sheet: {
     width: '100%',
     backgroundColor: colors.white,

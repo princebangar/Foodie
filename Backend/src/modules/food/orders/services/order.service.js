@@ -2187,6 +2187,10 @@ export async function rejectOrderDelivery(orderId, deliveryPartnerId) {
   return deliveryService.rejectOrderDelivery(orderId, deliveryPartnerId);
 }
 
+export async function setDeliveryOrderAlertMuted(orderId, deliveryPartnerId, muted) {
+  return deliveryService.setDeliveryOrderAlertMuted(orderId, deliveryPartnerId, muted);
+}
+
 export async function confirmReachedPickupDelivery(orderId, deliveryPartnerId) {
   return deliveryService.confirmReachedPickupDelivery(orderId, deliveryPartnerId);
 }

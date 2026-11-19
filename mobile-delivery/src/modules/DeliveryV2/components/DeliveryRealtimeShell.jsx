@@ -13,6 +13,7 @@ import { useRiderLocationSync } from '@/modules/DeliveryV2/hooks/useRiderLocatio
 import { useDeliveryStore } from '@/modules/DeliveryV2/store/useDeliveryStore';
 import { hasLocationPermission, startOnlineLocationUpdates, stopOnlineLocationUpdates } from '@/lib/riderLocation';
 import { deliveryAPI } from '@food/api';
+import { toast } from '@/lib/toast';
 
 let current = null;
 let last = null; // a kept-alive screen re-rendering in the commit that signs out still gets the last value
@@ -38,14 +39,33 @@ function useOnlineLocationService() {
       stopOnlineLocationUpdates();
       return;
     }
-    // Online from the last session, but location was turned off in the settings since: back to Offline, so the toggle
-    // does not show Online while no location (and no orders) can come in.
-    startOnlineLocationUpdates().then(async (started) => {
-      if (started || (await hasLocationPermission())) return;
+    const goOffline = () => {
       if (!useDeliveryStore.getState().isOnline) return;
       useDeliveryStore.getState().setOnline(false);
       deliveryAPI.updateOnlineStatus(false).catch(() => {});
-    });
+    };
+    let cancelled = false;
+    (async () => {
+      // Online from the last session, but location is not allowed (any more): back to Offline straight away, without
+      // asking. Asking here put the location screen up while orders kept coming (the server still had the rider
+      // Online), and the order popup covered it. Going Online again with the toggle asks properly.
+      if (!(await hasLocationPermission())) {
+        if (cancelled) return;
+        goOffline();
+        toast.error('You are Offline', {
+          id: 'online-location-permission',
+          description: 'Location permission is needed to stay Online. Go Online again to allow it.',
+          duration: 5000,
+        });
+        return;
+      }
+      const started = await startOnlineLocationUpdates();
+      if (cancelled || started || (await hasLocationPermission())) return;
+      goOffline();
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [isOnline]);
   // signing out unmounts the shell: the service stops with it
   useEffect(() => () => {

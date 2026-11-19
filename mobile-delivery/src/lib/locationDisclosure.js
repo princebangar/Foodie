@@ -13,6 +13,20 @@ let host = null; // (resolve) => void, set by LocationDisclosureHost
 let pending = null; // Promise<boolean> while the screen is up or waiting for the host
 let pendingResolve = null;
 let declinedThisRun = false;
+let shown = false; // the explanation screen is on screen (the incoming-order popup waits for it)
+const shownListeners = new Set();
+
+/** LocationDisclosureHost reports when its screen opens / closes. */
+export function setLocationDisclosureShown(value) {
+  if (shown === value) return;
+  shown = value;
+  shownListeners.forEach((fn) => fn());
+}
+export function subscribeLocationDisclosureShown(fn) {
+  shownListeners.add(fn);
+  return () => shownListeners.delete(fn);
+}
+export const isLocationDisclosureShown = () => shown;
 
 const wasAccepted = () => {
   try {

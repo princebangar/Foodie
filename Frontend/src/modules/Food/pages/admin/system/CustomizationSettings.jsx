@@ -85,6 +85,13 @@ const CUSTOMIZATION_TOGGLES = [
     defaultValue: true,
   },
   {
+    key: "diamond_membership_enabled",
+    label: "Diamond Membership",
+    description:
+      "Shows Foodie Diamond in the user app (Join button, member card, cart savings). When OFF it is hidden and no Diamond discount is applied.",
+    defaultValue: true,
+  },
+  {
     key: "driver_simulation_enabled",
     label: "Testing simulation for driver",
     description:

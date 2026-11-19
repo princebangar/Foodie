@@ -1173,6 +1173,20 @@ export async function assignOrderToPartnerAdmin(orderId, deliveryPartnerId, admi
   };
 }
 
+/** The rider muted / unmuted this order's alert in the app: its reminder pushes skip a muted rider. */
+export async function setDeliveryOrderAlertMuted(orderId, deliveryPartnerId, muted) {
+  const identity = buildOrderIdentityFilter(orderId);
+  if (!identity) throw new ValidationError('Order id required');
+  if (!mongoose.isValidObjectId(String(deliveryPartnerId || ''))) throw new ValidationError('Delivery partner required');
+  const partnerOid = new mongoose.Types.ObjectId(String(deliveryPartnerId));
+  const update = muted
+    ? { $addToSet: { 'dispatch.alertMutedBy': partnerOid } }
+    : { $pull: { 'dispatch.alertMutedBy': partnerOid } };
+  const res = await FoodOrder.updateOne(identity, update);
+  if (!res.matchedCount) throw new NotFoundError('Order not found');
+  return { muted: Boolean(muted) };
+}
+
 export async function rejectOrderDelivery(orderId, deliveryPartnerId) {
   const identity = buildOrderIdentityFilter(orderId);
   if (!identity) throw new ValidationError('Order id required');

@@ -6,6 +6,7 @@ import { FoodUser } from '../../../../core/users/user.model.js';
 import { FoodOrder } from '../../orders/models/order.model.js';
 import { FoodDiamondSettings } from '../models/diamondSettings.model.js';
 import { FoodDiamondMembership } from '../models/diamondMembership.model.js';
+import { FoodSystemConfig } from '../../admin/models/systemConfig.model.js';
 import {
     assertRazorpayPaymentMatches,
     createRazorpayOrder,
@@ -24,6 +25,26 @@ const rupees = (v) => `₹${Number(v || 0).toLocaleString('en-IN', { maximumFrac
 // ---------------------------------------------------------------------------
 // Settings
 // ---------------------------------------------------------------------------
+
+// Admin > Customization Settings > "Diamond Membership" (system config key, ON when never set). OFF: the apps get
+// no plan on sale and nobody counts as a member, so the Join button, the member strip and the cart savings disappear,
+// no Diamond discount is applied and no new membership can be bought. The apps need no update for this.
+export const DIAMOND_FEATURE_KEY = 'diamond_membership_enabled';
+let featureCache = { value: undefined, at: 0 };
+const FEATURE_TTL_MS = 10 * 1000;
+
+export async function isDiamondFeatureOn({ fresh = false } = {}) {
+    if (!fresh && featureCache.value !== undefined && Date.now() - featureCache.at < FEATURE_TTL_MS) {
+        return featureCache.value;
+    }
+    const doc = await FoodSystemConfig.findOne({ key: DIAMOND_FEATURE_KEY }).select('value').lean();
+    featureCache = { value: doc ? doc.value === true : true, at: Date.now() };
+    return featureCache.value;
+}
+
+export function setDiamondFeatureCache(value) {
+    featureCache = { value: value === true, at: Date.now() };
+}
 
 let settingsCache = { doc: undefined, at: 0 };
 const SETTINGS_TTL_MS = 30 * 1000;
@@ -165,6 +186,7 @@ export function computeDiamondSavings(s, { subtotal, deliveryFee, platformFee, o
  * when Diamond is on sale, `offer` says how much they would have saved.
  */
 export async function resolveDiamondPricing(userId, ctx) {
+    if (!(await isDiamondFeatureOn())) return { isMember: false, savings: null, offer: null };
     const doc = await getDiamondSettingsDoc();
     if (!doc) return { isMember: false, savings: null, offer: null };
     const s = normalizeSettings(doc);
@@ -226,9 +248,19 @@ async function getSavingsSince(userId, since) {
 export async function getUserDiamond(userId) {
     await reconcilePendingDiamond(userId).catch(() => {});
     const s = normalizeSettings(await getDiamondSettingsDoc());
+    if (!(await isDiamondFeatureOn())) {
+        // switched off in admin: nothing on sale, nobody shown as a member
+        return {
+            featureEnabled: false,
+            plan: { ...toPublicPlan(s), enabled: false },
+            membership: { isMember: false, since: null, endAt: null, daysLeft: 0 },
+            savings: null
+        };
+    }
     const status = await getMembershipStatus(userId);
     const savings = status.isMember ? await getSavingsSince(userId, status.since) : null;
     return {
+        featureEnabled: true,
         plan: toPublicPlan(s),
         membership: {
             isMember: status.isMember,
@@ -249,7 +281,9 @@ export async function createDiamondOrder(userId) {
     const oid = toObjectId(userId);
     if (!oid) throw new ValidationError('User not found');
     const s = normalizeSettings(await getDiamondSettingsDoc({ fresh: true }));
-    if (!s.enabled || s.price <= 0) throw new ValidationError('Foodie Diamond is not available right now');
+    if (!(await isDiamondFeatureOn({ fresh: true })) || !s.enabled || s.price <= 0) {
+        throw new ValidationError('Foodie Diamond is not available right now');
+    }
 
     const amountPaise = Math.round(s.price * 100);
     let razorpay;

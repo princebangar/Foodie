@@ -18,8 +18,8 @@
 //     panels are absolute layers that end above the bottom bar like the web's bottom-[92px]; tel: / Google Maps links
 //     open with Linking; window.location.reload after a session expiry -> a second replace-navigation to the login.
 //   - The minimized trip panel slides in when restored; it is removed at once when minimized (no slide-out).
-import React, { memo, useState, useRef, useEffect, useCallback } from 'react';
-import { Animated, Dimensions, Easing, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import React, { memo, useState, useRef, useEffect, useCallback, useSyncExternalStore } from 'react';
+import { Animated, Dimensions, Easing, Linking, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -31,6 +31,7 @@ import apiClient from '@food/api/axios';
 import { useNavigate } from '@/lib/router';
 import { toast } from '@/lib/toast';
 import { ensureOnlineLocationPermission, setRiderBackgroundHandler } from '@/lib/riderLocation';
+import { isLocationDisclosureShown, subscribeLocationDisclosureShown } from '@/lib/locationDisclosure';
 import { AppImage, Sheet, Text, useBottomNavSpace } from '@/native/ui';
 import { StatusBar } from '@/native/ui/SectionStatusBar';
 import { alpha, colors, deliveryTheme, fonts } from '@/theme';
@@ -195,9 +196,15 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
   // order (multi-order limit set in admin), further offers stay in the Orders
   // tab with its short ring, as before.
   const newOrders = useDeliveryStore((state) => state.newOrders);
+  // the Distance / Arrival cards: two equal halves of the row (statusWrap padding 12 + gap 12). With flex the Arrival
+  // card was squeezed to a sliver on the phone.
+  const { width: windowWidth } = useWindowDimensions();
+  const statCardWidth = Math.floor((windowWidth - 24 - 12) / 2);
   const [dismissedOfferKey, setDismissedOfferKey] = useState(null);
   const [offerActionBusy, setOfferActionBusy] = useState(false);
-  const feedOffer = tabActive && isOnline && acceptedOrders.length === 0
+  // not while the location explanation is up: the popup covered it and the rider could not reach "Continue"
+  const locationScreenShown = useSyncExternalStore(subscribeLocationDisclosureShown, isLocationDisclosureShown);
+  const feedOffer = tabActive && isOnline && acceptedOrders.length === 0 && !locationScreenShown
     ? dedupeOrdersByIdentity(newOrders).find((order) => resolveOrderKey(order) !== dismissedOfferKey && isOfferFresh(order)) || null
     : null;
   const feedOfferKey = feedOffer ? resolveOrderKey(feedOffer) : null;
@@ -1170,11 +1177,11 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
               {activeOrder ? (
                 <View style={styles.statGrid}>
                   {/* LEFT: DISTANCE */}
-                  <View style={styles.statCard}>
+                  <View style={[styles.statCard, { width: statCardWidth }]}>
                     <View style={styles.statTexts}>
                       <Text style={styles.statKicker}>Distance</Text>
                       <View style={styles.statValueRow}>
-                        <Text style={styles.statValue}>{formatTripDistanceKm(distanceToTarget)}</Text>
+                        <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit>{formatTripDistanceKm(distanceToTarget)}</Text>
                         <Text style={styles.statUnit}>KM</Text>
                       </View>
                     </View>
@@ -1186,11 +1193,11 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                   </View>
 
                   {/* RIGHT: TIME */}
-                  <View style={styles.statCard}>
+                  <View style={[styles.statCard, { width: statCardWidth }]}>
                     <View style={styles.statTexts}>
                       <Text style={styles.statKicker}>Arrival</Text>
                       <View style={styles.statValueRow}>
-                        <Text style={styles.statValue}>{eta ? String(eta) : '--'}</Text>
+                        <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit>{eta ? String(eta) : '--'}</Text>
                         <Text style={styles.statUnit}>MIN</Text>
                       </View>
                     </View>
@@ -1246,7 +1253,8 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
               onMinimize={() => setIsModalMinimized(true)}
             />
           ) : null}
-          {(tripStatus === 'PICKED_UP' || tripStatus === 'REACHED_DROP') ? (
+          {/* hidden while the verification panel is up: the VERIFY & COMPLETE button showed over the sliding panel */}
+          {(tripStatus === 'PICKED_UP' || (tripStatus === 'REACHED_DROP' && !showVerification)) ? (
             <View style={[styles.dropWrap, { bottom: navBottom92 + 16 }]} pointerEvents="box-none">
               {tripStatus === 'PICKED_UP' ? (
                 <View style={styles.dropCard}>
@@ -1540,7 +1548,7 @@ const styles = StyleSheet.create({
   statusWrap: { paddingHorizontal: 12, marginTop: 4 },
   statGrid: { flexDirection: 'row', gap: 12, width: '100%' },
   statCard: {
-    flex: 1,
+    gap: 8,
     backgroundColor: deliveryTheme.primary,
     borderRadius: 16,
     padding: 14,
@@ -1552,12 +1560,12 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...roundedShadow,
   },
-  statTexts: { flexDirection: 'column' },
+  statTexts: { flexDirection: 'column', flexShrink: 1, minWidth: 0 },
   statKicker: { fontSize: 9, lineHeight: 12, color: alpha(colors.white, 0.7), fontFamily: fonts.sora, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.35, marginBottom: 4 },
   statValueRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
   statValue: { fontSize: 24, lineHeight: 24, fontFamily: fonts.sora, fontWeight: '900', color: colors.white, letterSpacing: -1.2 },
   statUnit: { fontSize: 11, lineHeight: 14, color: alpha(colors.white, 0.8), fontWeight: '700', marginBottom: 2 },
-  statIcon: { width: 36, height: 36, backgroundColor: colors.white, borderRadius: 14, alignItems: 'center', justifyContent: 'center', elevation: 8 },
+  statIcon: { flexShrink: 0, width: 36, height: 36, backgroundColor: colors.white, borderRadius: 14, alignItems: 'center', justifyContent: 'center', elevation: 8 },
   rotate45: { transform: [{ rotate: '45deg' }] },
   systemCard: { backgroundColor: alpha(colors.white, 0.05), borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: deliveryTheme.border, ...roundedShadow },
   systemRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },

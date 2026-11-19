@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MapPin, Navigation, Bike, PowerOff } from 'lucide-react-native';
 import { Text } from '@/native/ui';
 import { deliveryTheme as dv } from '@/theme';
-import { registerLocationDisclosureHost } from '@/lib/locationDisclosure';
+import { registerLocationDisclosureHost, setLocationDisclosureShown } from '@/lib/locationDisclosure';
 import { navigateTo } from '@/lib/router';
 
 const POINTS = [
@@ -28,6 +28,10 @@ export function LocationDisclosureHost() {
     });
     return () => registerLocationDisclosureHost(null);
   }, []);
+
+  useEffect(() => {
+    setLocationDisclosureShown(open);
+  }, [open]);
 
   const close = (accepted) => {
     setOpen(false);

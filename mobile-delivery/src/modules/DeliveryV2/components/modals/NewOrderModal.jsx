@@ -151,7 +151,7 @@ export const NewOrderModal = ({ order, onAccept, onReject, onMinimize, isMuted =
   };
 
   return (
-    <Sheet open onClose={onMinimize} dismissible={false} backdropOpacity={0.6} style={styles.sheet}>
+    <Sheet open onClose={onMinimize} onBack={onMinimize} dismissible={false} backdropOpacity={0.6} style={styles.sheet}>
       {/* Handle / Minimize */}
       <View style={styles.handleRow}>
         <Pressable onPress={onMinimize} style={({ pressed }) => [styles.handleBtn, pressed && styles.pressed]}>

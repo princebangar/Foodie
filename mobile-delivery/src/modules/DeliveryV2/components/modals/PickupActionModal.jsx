@@ -43,7 +43,9 @@ export const PickupActionModal = ({
   const [isUploadingBill, setIsUploadingBill] = useState(false);
   const [billImageUploaded, setBillImageUploaded] = useState(false);
   const [billImageUrl, setBillImageUrl] = useState(null);
-  // web: bottom-[92px] (the bottom bar stays reachable)
+  // The sheet's white reaches the bottom of the screen behind the floating bottom bar (it ended above the bar, with the
+  // map showing around it), but its scrolling part ends above the bar: a long item list scrolls inside the panel and
+  // never slides behind the bar.
   const navSpace = useBottomNavSpace(-4);
 
   if (!order) return null;
@@ -210,11 +212,11 @@ export const PickupActionModal = ({
     : `${formatTripDistanceKm(distanceToTarget)} km • ${eta || '--'} min to Store`;
 
   return (
-    <View style={[styles.layer, { bottom: navSpace }]} pointerEvents="box-none">
+    <View style={styles.layer} pointerEvents="box-none">
       {/* Background Dim */}
       <View style={styles.dim} />
 
-      <View style={[styles.sheet, { maxHeight: Dimensions.get('window').height * 0.84 }]}>
+      <View style={[styles.sheet, { maxHeight: Dimensions.get('window').height * 0.84 + navSpace, paddingBottom: navSpace }]}>
         <ScrollView contentContainerStyle={styles.sheetContent} bounces={false} keyboardShouldPersistTaps="handled">
           {/* Handle / Minimize */}
           <View style={styles.handleRow}>
@@ -365,13 +367,14 @@ export const PickupActionModal = ({
                 <Package size={20} color={colors.gray[400]} />
                 <Text style={styles.itemsToggleText}>{`Order Details (${items.length || 0})`}</Text>
               </View>
-              {showItems ? <ChevronDown size={16} color={colors.gray[900]} /> : <ChevronUp size={16} color={colors.gray[900]} />}
+              {/* closed: down (tap to open), open: up (tap to close) */}
+              {showItems ? <ChevronUp size={16} color={colors.gray[900]} /> : <ChevronDown size={16} color={colors.gray[900]} />}
             </Pressable>
 
             {showItems ? (
               <View style={styles.itemsList}>
                 {items.map((item, idx) => (
-                  <View key={idx} style={[styles.itemRow, idx === items.length - 1 && styles.itemRowLast]}>
+                  <View key={idx} style={styles.itemCard}>
                     <View style={styles.flexMin}>
                       <Text style={styles.itemName}>{item.name || 'Item Name'}</Text>
                       {item.variantName ? (
@@ -484,9 +487,20 @@ const styles = StyleSheet.create({
   itemsToggle: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 14, backgroundColor: colors.gray[50], borderRadius: 16, borderWidth: 1, borderColor: deliveryTheme.border, ...roundedShadow },
   itemsToggleLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   itemsToggleText: { color: colors.gray[900], fontWeight: '700', fontSize: 12, lineHeight: 16, textTransform: 'uppercase', letterSpacing: 1.2 },
-  itemsList: { overflow: 'hidden', gap: 8, paddingHorizontal: 4 },
-  itemRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', padding: 12, borderBottomWidth: 1, borderBottomColor: colors.gray[50] },
-  itemRowLast: { borderBottomWidth: 0 },
+  // one card per item, under each other
+  itemsList: { gap: 10, paddingTop: 2 },
+  itemCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: colors.white,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: deliveryTheme.border,
+    ...roundedShadow,
+  },
   itemName: { color: colors.gray[700], fontSize: 14, lineHeight: 20, fontWeight: '700' },
   itemVariant: { fontSize: 12, lineHeight: 16, color: colors.gray[500], fontWeight: '500', marginTop: 2 },
   qtyPill: { backgroundColor: deliveryTheme.primarySoft, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, marginLeft: 8 },

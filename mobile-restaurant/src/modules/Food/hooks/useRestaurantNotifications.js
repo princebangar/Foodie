@@ -19,7 +19,7 @@
 //   - Native addition: when the app comes back to the front (visibilitychange 'visible', fired from AppState) a socket
 //     that dropped while the app was in the background reconnects at once, then the web's poll runs.
 import { useEffect, useState, useCallback } from 'react';
-import { Vibration } from 'react-native';
+import { AppState, Vibration } from 'react-native';
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import io from 'socket.io-client';
 import { toast } from '@/lib/toast';
@@ -187,10 +187,17 @@ const stopGlobalAlertLoop = () => {
   } catch (_) {}
 };
 
+// In the background the order's push already rings (channel 'restaurant_orders': the same 28 s alert tone). The app's
+// own ring would play over it, so it waits until that tone has finished and then keeps ringing while the order waits.
+const PUSH_TONE_MS = 28000;
+const pushToneIsPlaying = () =>
+  AppState.currentState !== 'active' && globalAlertLoopStartedAt > 0 && Date.now() - globalAlertLoopStartedAt < PUSH_TONE_MS;
+
 const playGlobalNotificationSound = async (orderData = {}) => {
   try {
     loadStoredState();
     if (globalIsMuted || isOrderMuted(orderData)) return;
+    if (pushToneIsPlaying()) return;
     try {
       Vibration.vibrate(VIBRATION_PATTERN);
     } catch (_) {}
@@ -570,6 +577,42 @@ export const useRestaurantNotifications = () => {
         dispatchNotificationInboxRefresh();
       }
 
+      // Cancelled (by the customer, admin or the restaurant) while it was still ringing: close the popup and stop the
+      // alert for that order. Before, only an accept closed it, so a customer-cancelled order kept asking to be accepted.
+      if (status.startsWith('cancelled') || status === 'rejected') {
+        const idsOf = (o) =>
+          [o?.orderMongoId, o?.orderId, o?._id, o?.id, o?.mongoId, o?.order_id, o?.order_mongo_id]
+            .filter(Boolean)
+            .map((id) => String(id).trim());
+        const cancelledIds = idsOf(data);
+        if (cancelledIds.length) {
+          cancelledIds.forEach((id) => {
+            processedOrderIds.add(id);
+            globalMutedOrderIds.delete(id);
+          });
+          saveProcessedOrderIds();
+          saveMutedOrderIds();
+          const isCancelled = (o) => Boolean(o) && idsOf(o).some((id) => cancelledIds.includes(id));
+          const popupCancelled = isCancelled(globalNewOrder);
+          const ringingCancelled = isCancelled(globalActiveOrder);
+          if (ringingCancelled) stopGlobalAlertLoop();
+          if (popupCancelled || ringingCancelled) {
+            updateGlobalState({
+              ...(popupCancelled ? { newOrder: null } : {}),
+              ...(ringingCancelled ? { activeOrder: null } : {}),
+              mutedOrderIds: new Set(globalMutedOrderIds),
+            });
+            if (status === 'cancelled_by_user') {
+              toast.error(friendlyOrderId ? `Order ${friendlyOrderId} was cancelled by the customer` : 'Order cancelled by the customer', {
+                duration: 6000,
+                id: `user-cancelled-${cancelledIds[0]}`,
+              });
+            }
+          }
+        }
+        dispatchNotificationInboxRefresh();
+      }
+
       if (status === 'cancelled_by_admin') {
         toast.error(`Order ${friendlyOrderId} Rejected By Admin`, {
           duration: 6000,
@@ -767,6 +810,15 @@ export const useRestaurantNotifications = () => {
     if (!orderId) return;
     const cleanId = String(orderId).trim();
     globalMutedOrderIds.delete(cleanId);
+    // the order may have been muted under several of its ids (mongo id, order number ...): unmute them all, otherwise
+    // isOrderMuted (which checks every id) kept it muted
+    [globalActiveOrder, globalNewOrder].forEach((o) => {
+      if (!o) return;
+      const ids = [o.orderMongoId, o.order_mongo_id, o.orderId, o.order_id, o._id, o.id, o.mongoId]
+        .filter(Boolean)
+        .map((id) => String(id).trim());
+      if (ids.includes(cleanId)) ids.forEach((id) => globalMutedOrderIds.delete(id));
+    });
     saveMutedOrderIds();
 
     // Restart the alert for the active order once it is no longer muted.

@@ -160,6 +160,8 @@ const dispatchSchema = new mongoose.Schema(
             allowOverLimit: { type: Boolean, default: false },
             requiredCashForOrder: { type: Number, default: 0 }
         }],
+        /** Riders who muted this order's alert in the app: its reminder pushes skip them until they unmute. */
+        alertMutedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'FoodDeliveryPartner' }],
         dispatchingAt: { type: Date }
     },
     { _id: false }

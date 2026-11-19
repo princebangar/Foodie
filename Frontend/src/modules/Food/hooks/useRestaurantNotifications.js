@@ -739,6 +739,42 @@ export const useRestaurantNotifications = () => {
         dispatchNotificationInboxRefresh();
       }
 
+      // Cancelled (by the customer, admin or the restaurant) while it was still ringing: close the popup and stop the
+      // alert for that order. Before, only an accept closed it, so a customer-cancelled order kept asking to be accepted.
+      if (status.startsWith('cancelled') || status === 'rejected') {
+        const idsOf = (o) =>
+          [o?.orderMongoId, o?.orderId, o?._id, o?.id, o?.mongoId, o?.order_id, o?.order_mongo_id]
+            .filter(Boolean)
+            .map((id) => String(id).trim());
+        const cancelledIds = idsOf(data);
+        if (cancelledIds.length) {
+          cancelledIds.forEach((id) => {
+            processedOrderIds.add(id);
+            globalMutedOrderIds.delete(id);
+          });
+          saveProcessedOrderIds();
+          saveMutedOrderIds();
+          const isCancelled = (o) => Boolean(o) && idsOf(o).some((id) => cancelledIds.includes(id));
+          const popupCancelled = isCancelled(globalNewOrder);
+          const ringingCancelled = isCancelled(globalActiveOrder);
+          if (ringingCancelled) stopGlobalAlertLoop();
+          if (popupCancelled || ringingCancelled) {
+            updateGlobalState({
+              ...(popupCancelled ? { newOrder: null } : {}),
+              ...(ringingCancelled ? { activeOrder: null } : {}),
+              mutedOrderIds: new Set(globalMutedOrderIds),
+            });
+            if (status === 'cancelled_by_user') {
+              toast.error(friendlyOrderId ? `Order ${friendlyOrderId} was cancelled by the customer` : 'Order cancelled by the customer', {
+                duration: 6000,
+                id: `user-cancelled-${cancelledIds[0]}`,
+              });
+            }
+          }
+        }
+        dispatchNotificationInboxRefresh();
+      }
+
       if (status === 'cancelled_by_admin') {
         toast.error(`Order ${friendlyOrderId} Rejected By Admin`, {
           duration: 6000,

@@ -30,15 +30,22 @@ const HARD_MAX_OFFER_DISTANCE_KM = 40;
  * open; a rider with the app in the background or closed only learns about the order by push.
  */
 async function pushNewOrderToPartners(partners = [], order) {
+  // a rider who muted this order in the app gets no reminder pushes for it (the push would ring past the mute)
+  const muted = new Set((order?.dispatch?.alertMutedBy || []).map((id) => String(id)));
   const targets = (partners || [])
     .map((p) => p?.partnerId || p?._id)
     .filter(Boolean)
+    .filter((id) => !muted.has(String(id)))
     .map((id) => ({ ownerType: 'DELIVERY_PARTNER', ownerId: id }));
   if (!targets.length) return;
   try {
     await notifyOwnersSafely(targets, {
       title: 'New order assigned!',
       body: `You have 60 seconds to accept Order #${order.order_id || order.orderId || order._id}.`,
+      // The delivery app's "New orders" channel: the order alert tone, max importance, rings through Do Not Disturb.
+      // Without it the push fell back to a plain notification channel (normal tone, or silent on some phones).
+      channelId: 'delivery_orders',
+      sound: 'restaurant_alert',
       data: {
         type: 'new_order',
         orderId: order.order_id || order._id.toString(),

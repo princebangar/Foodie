@@ -16,7 +16,7 @@
 //   - Native addition: when the app comes back to the front and the socket dropped while it was in the background,
 //     it reconnects at once (next to the web's recoverDeliveryState on visibilitychange / focus).
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Vibration } from 'react-native';
+import { AppState, Vibration } from 'react-native';
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import { isOfferFresh } from '@/modules/DeliveryV2/utils/offerFreshness';
 import io from 'socket.io-client';
@@ -159,6 +159,8 @@ export const useDeliveryNotifications = () => {
   const activeOrderRef = useRef(null);
   const alertLoopTimerRef = useRef(null);
   const alertLoopStartedAtRef = useRef(0);
+  // background: the app's ring waits until the push's own 28 s alert tone (channel 'delivery_orders') has finished
+  const backgroundRingTimerRef = useRef(null);
   const lastAlertAtByOrderRef = useRef(new Map());
   const processedOrderIdsRef = useRef(new Set());
   const mutedOrderIdsRef = useRef((() => {
@@ -319,6 +321,10 @@ export const useDeliveryNotifications = () => {
   const stopAlertLoop = useCallback(() => {
     clearAlertLoopTimer();
     alertLoopStartedAtRef.current = 0;
+    if (backgroundRingTimerRef.current) {
+      clearTimeout(backgroundRingTimerRef.current);
+      backgroundRingTimerRef.current = null;
+    }
 
     if (audioRef.current) {
       try {
@@ -357,8 +363,20 @@ export const useDeliveryNotifications = () => {
     }
   }, []);
 
-  const playNotificationSound = useCallback((orderData = {}) => {
+  const playNotificationSound = useCallback((orderData = {}, fromBackgroundWait = false) => {
     if (isOrderAlertMuted(orderData)) {
+      return;
+    }
+    // In the background the order's push already rings with the same tone: start the app's own (looping) ring only
+    // after it, so the two do not play over each other, and only if the order is still waiting then.
+    if (!fromBackgroundWait && AppState.currentState !== 'active') {
+      if (backgroundRingTimerRef.current) return;
+      backgroundRingTimerRef.current = setTimeout(() => {
+        backgroundRingTimerRef.current = null;
+        const waiting = activeOrderRef.current;
+        if (!waiting || isOrderAlertMuted(waiting) || !alertLoopStartedAtRef.current) return;
+        playNotificationSoundRef.current?.(waiting, true);
+      }, 28000);
       return;
     }
 
@@ -392,6 +410,8 @@ export const useDeliveryNotifications = () => {
       void playSynthDeliveryBeep();
     }
   }, [isOrderAlertMuted, playSynthDeliveryBeep]);
+  const playNotificationSoundRef = useRef(null);
+  playNotificationSoundRef.current = playNotificationSound;
 
   const triggerOrderAlertFor10Sec = useCallback((orderData) => {
     const target = orderData || activeOrderRef.current || newOrder;
@@ -436,6 +456,11 @@ export const useDeliveryNotifications = () => {
       });
       saveMutedOrderIds();
       setMuteUiTick((tick) => tick + 1);
+
+      // tell the backend too: the order's reminder pushes (sent every ~2 min while nobody takes it) would ring the
+      // phone in the background although the order is muted here
+      const mongoKey = keys.find((key) => /^[0-9a-fA-F]{24}$/.test(key)) || keys[0];
+      deliveryAPI.setOrderAlertMuted?.(mongoKey, muted).catch(() => {});
 
       if (muted) {
         stopAlertLoop();
