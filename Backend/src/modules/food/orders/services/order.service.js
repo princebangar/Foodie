@@ -1840,6 +1840,63 @@ export async function listOrdersRestaurant(restaurantId, query) {
   return buildPaginatedResult({ docs: docs.map(d => toRestaurantFacingOrder(d)), total, page, limit });
 }
 
+/**
+ * Admin > Restaurant settings: a restaurant has N minutes to accept a new delivery / takeaway order. The app's popup
+ * rejects it when its countdown ends, but only while the app is open; this sweep does the same on the server, so an
+ * order also ends on time when the restaurant app is closed. Same rule as the app (time counted from createdAt,
+ * 5 s grace) and the same reject call (onlyIfPending: an order accepted meanwhile is left alone).
+ */
+export async function autoRejectExpiredRestaurantOrders() {
+  const { resolveRestaurantSettings } = await import("../../admin/controllers/systemConfig.controller.js");
+  const { deliveryAcceptOrderTimeMinutes, takeawayAcceptOrderTimeMinutes } = await resolveRestaurantSettings();
+  const now = Date.now();
+  const windows = [
+    { orderType: "delivery", minutes: deliveryAcceptOrderTimeMinutes },
+    { orderType: "takeaway", minutes: takeawayAcceptOrderTimeMinutes },
+  ].filter((w) => Number(w.minutes) > 0);
+  if (!windows.length) return 0;
+
+  let rejected = 0;
+  for (const { orderType, minutes } of windows) {
+    const cutoff = new Date(now - Number(minutes) * 60 * 1000 - 5000);
+    const candidates = await FoodOrder.find({
+      orderType,
+      orderStatus: { $in: ["created", "confirmed"] },
+      acceptedAt: { $exists: false },
+      createdAt: { $lte: cutoff },
+      // scheduled orders wait for their time, not for createdAt
+      $or: [{ scheduledAt: null }, { scheduledAt: { $exists: false } }, { scheduledAt: { $lte: new Date(now) } }],
+      // only orders the restaurant could see (cash / wallet, or online and paid)
+      $and: [{
+        $or: [
+          { "payment.method": { $in: ["cash", "wallet"] } },
+          { "payment.status": { $in: ["paid", "authorized", "captured", "settled"] } },
+        ],
+      }],
+    })
+      .select("_id restaurantId")
+      .limit(50)
+      .lean();
+
+    for (const order of candidates) {
+      try {
+        await updateOrderStatusRestaurant(
+          String(order._id),
+          String(order.restaurantId),
+          "cancelled_by_restaurant",
+          "No response from restaurant (Auto-rejected)",
+          0,
+          { onlyIfPending: true },
+        );
+        rejected += 1;
+      } catch (err) {
+        logger.warn(`Auto-reject of order ${order._id} failed: ${err?.message || err}`);
+      }
+    }
+  }
+  return rejected;
+}
+
 export async function updateOrderStatusRestaurant(
   orderId,
   restaurantId,

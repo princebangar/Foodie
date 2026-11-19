@@ -20,6 +20,7 @@ let fssaiExpiryInterval = null;
 let paymentReconcileInterval = null;
 let refundRetryInterval = null;
 let dispatchSweepInterval = null;
+let restaurantAutoRejectInterval = null;
 
 const gracefulShutdown = async (signal) => {
     logger.info(`${signal} received, starting graceful shutdown`);
@@ -37,6 +38,7 @@ const gracefulShutdown = async (signal) => {
             if (paymentReconcileInterval) clearInterval(paymentReconcileInterval);
             if (refundRetryInterval) clearInterval(refundRetryInterval);
             if (dispatchSweepInterval) clearInterval(dispatchSweepInterval);
+            if (restaurantAutoRejectInterval) clearInterval(restaurantAutoRejectInterval);
             logger.info('Graceful shutdown complete');
             process.exit(0);
         } catch (err) {
@@ -151,6 +153,19 @@ const startServer = async () => {
             }
         };
         dispatchSweepInterval = setInterval(runDispatchSweep, 60 * 1000);
+
+        // New orders the restaurant did not accept within the admin's accept time: reject them (also when the
+        // restaurant app is closed; the app's own countdown only runs while it is open).
+        const runRestaurantAutoReject = async () => {
+            try {
+                const { autoRejectExpiredRestaurantOrders } = await import('./src/modules/food/orders/services/order.service.js');
+                const count = await autoRejectExpiredRestaurantOrders();
+                if (count > 0) logger.info(`Restaurant auto-reject: ${count} order(s) not accepted in time`);
+            } catch (err) {
+                logger.error(`Restaurant auto-reject error: ${err.message}`);
+            }
+        };
+        restaurantAutoRejectInterval = setInterval(runRestaurantAutoReject, 30 * 1000);
 
         process.on('SIGINT', () => gracefulShutdown('SIGINT'));
         process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
