@@ -9,7 +9,7 @@
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#B80B3D",
     "android": {
-      "package": "com.foodie.user",
+      "package": "com.user.foodie",
       "versionCode": 1,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {

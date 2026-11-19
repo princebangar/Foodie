@@ -213,7 +213,7 @@ export default function MasterLandingPage() {
             className="flex flex-col sm:flex-row items-center gap-4 justify-center relative z-30"
           >
             <a
-              href="https://play.google.com/store/apps/details?id=com.foodie.user"
+              href="https://play.google.com/store/apps/details?id=com.user.foodie"
               target="_blank"
               rel="noopener noreferrer"
               style={{ cursor: 'pointer' }}
@@ -600,7 +600,7 @@ export default function MasterLandingPage() {
 
               <div className="flex flex-col sm:flex-row items-center gap-4 justify-center md:justify-start relative z-30">
                 <a
-                  href="https://play.google.com/store/apps/details?id=com.foodie.user"
+                  href="https://play.google.com/store/apps/details?id=com.user.foodie"
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{ cursor: 'pointer' }}
@@ -766,7 +766,7 @@ export default function MasterLandingPage() {
                   </span>
                 </a>
                 <a
-                  href="https://play.google.com/store/apps/details?id=com.foodie.user"
+                  href="https://play.google.com/store/apps/details?id=com.user.foodie"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-3 w-[190px] rounded-xl border border-white/30 px-4 py-2 text-white hover:border-white hover:bg-white/5 transition-all"

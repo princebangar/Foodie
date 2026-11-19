@@ -325,8 +325,10 @@ const useStyles = makeStyles((t) => ({
   clearBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 8, height: 32, borderRadius: 8 },
   clearText: { fontSize: 12, lineHeight: 16, fontWeight: "500", color: colors.gray[500] },
   card: { position: "relative", paddingVertical: 4, gap: 0, borderWidth: 1 },
+  // solid colours (the same tints, pre-mixed): a see-through background let the card's Android shadow show through
+  // as a darker box inside every unread card
   cardUnread: {
-    backgroundColor: t.dark ? alpha(colors.red[900], 0.2) : alpha(colors.red[50], 0.5),
+    backgroundColor: t.dark ? "#271925" : "#FFF8F8",
     borderColor: t.dark ? colors.red[800] : colors.red[200],
   },
   cardRead: { backgroundColor: t.dark ? colors.gray[800] : colors.white, borderColor: t.dark ? colors.gray[700] : colors.gray[200] },
